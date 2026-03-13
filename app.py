@@ -119,8 +119,8 @@ else:
         
         selecao = option_menu(
             menu_title=None, 
-            options=["Hub Central", "Resolver Questões", "Meu Desempenho", "Zona de Estudo", "Meu Perfil"],
-            icons=["house", "bullseye", "bar-chart-line", "stopwatch", "person-badge"],
+            options=["Hub Central", "Resolver Questões", "Meu Desempenho", "Zona de Estudo", "Área do Professor", "Meu Perfil"],
+            icons=["house", "bullseye", "bar-chart-line", "stopwatch", "pencil-square", "person-badge"],
             default_index=0,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
@@ -200,66 +200,137 @@ else:
         st.title("🧠 Zona de Estudo")
         st.info("Gerenciador Pomodoro.")
         
-    elif selecao == "Meu Perfil":
-        st.markdown("## 👤 Meu Perfil")
-        st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Gerencie as suas informações pessoais e configurações de segurança.</p>", unsafe_allow_html=True)
-        
-        # Gerar URL do avatar para usar na tela principal
-        email_usuario = st.session_state.utilizador.email
-        inicial = email_usuario[0].upper()
-        url_avatar_grande = f"https://ui-avatars.com/api/?name={inicial}&background=3E2723&color=D4AF37&rounded=true&bold=true&size=256"
+    elif selecao == "Área do Professor":
+        st.markdown("## 👨‍🏫 Área do Professor (Seed)")
+        st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Gestão da base de conhecimento, bancas e questões.</p>", unsafe_allow_html=True)
 
-        col_foto, col_dados = st.columns([1, 2])
-        
-        with col_foto:
-            st.markdown(f"""
-                <div class="baply-card" style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                    <img src="{url_avatar_grande}" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid #D4AF37; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
-                    <h4 style="color: #3E2723; margin-bottom: 0px;">{inicial}</h4>
-                    <p style="color: #7F8C8D; font-size: 0.85rem;">Estudante de Elite</p>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("📸 Alterar Avatar (Em breve)", use_container_width=True):
-                st.toast("A conexão com o Supabase Storage será ativada na próxima fase!")
+        from database import get_engine
+        from sqlalchemy.orm import Session
+        from backend.models import Banca, Disciplina, Assunto, Questao, Alternativa, DificuldadeEnum
 
-        with col_dados:
-            with st.container():
-                st.markdown('<div class="baply-card" style="border-left-color: #3E2723;">', unsafe_allow_html=True)
-                st.markdown("<h4 style='color: #3E2723; margin-bottom: 20px;'>Dados da Conta</h4>", unsafe_allow_html=True)
+        tab_banca, tab_disc, tab_questao = st.tabs(["🏛️ 1. Bancas", "📚 2. Disciplinas & Assuntos", "✍️ 3. Nova Questão"])
+
+        # -----------------------------------------
+        # ABA 1: BANCAS
+        # -----------------------------------------
+        with tab_banca:
+            st.markdown("#### Cadastrar Nova Banca")
+            with st.form("form_banca"):
+                sigla_banca = st.text_input("Sigla", placeholder="Ex: FCC, CEBRASPE, IBFC")
+                nome_banca = st.text_input("Nome Completo", placeholder="Ex: Fundação Carlos Chagas")
                 
-                # --- 1. INÍCIO DO FORMULÁRIO ---
-                with st.form("form_perfil"):
-                    st.text_input("E-mail de Acesso (Fixo)", value=email_usuario, disabled=True)
-                    nome_input = st.text_input("Nome de Exibição", placeholder="Ex: Jean Dias")
-                    foco_input = st.text_input("Foco / Edital Principal", placeholder="Ex: Prefeitura de Catende / TGP")
+                if st.form_submit_button("Salvar Banca", type="primary"):
+                    try:
+                        with Session(get_engine()) as session:
+                            nova_banca = Banca(sigla=sigla_banca.upper(), nome=nome_banca)
+                            session.add(nova_banca)
+                            session.commit()
+                            st.success(f"✅ Banca {sigla_banca} cadastrada com sucesso!")
+                    except Exception as e:
+                        st.error(f"Erro ao salvar: Já existe? Detalhes: {e}")
+
+        # -----------------------------------------
+        # ABA 2: DISCIPLINAS E ASSUNTOS
+        # -----------------------------------------
+        with tab_disc:
+            col_d, col_a = st.columns(2)
+            with col_d:
+                st.markdown("#### Nova Disciplina")
+                with st.form("form_disc"):
+                    nome_disc = st.text_input("Nome da Disciplina", placeholder="Ex: Auditoria Governamental")
+                    if st.form_submit_button("Salvar Disciplina", type="primary"):
+                        with Session(get_engine()) as session:
+                            nova_disc = Disciplina(nome=nome_disc)
+                            session.add(nova_disc)
+                            session.commit()
+                            st.success(f"✅ Disciplina {nome_disc} salva!")
+
+            with col_a:
+                st.markdown("#### Novo Assunto")
+                with Session(get_engine()) as session:
+                    todas_disciplinas = session.query(Disciplina).all()
+                    opcoes_disc = {d.nome: d.id for d in todas_disciplinas}
+                
+                with st.form("form_assunto"):
+                    if not opcoes_disc:
+                        st.warning("Cadastre uma disciplina primeiro.")
+                    
+                    disc_selecionada = st.selectbox("Vincular à Disciplina:", options=list(opcoes_disc.keys()))
+                    nome_assunto = st.text_input("Nome do Assunto", placeholder="Ex: Normas Internacionais (ISSAI)")
+                    
+                    if st.form_submit_button("Salvar Assunto", type="primary") and opcoes_disc:
+                        with Session(get_engine()) as session:
+                            novo_assunto = Assunto(nome=nome_assunto, disciplina_id=opcoes_disc[disc_selecionada])
+                            session.add(novo_assunto)
+                            session.commit()
+                            st.success(f"✅ Assunto {nome_assunto} salvo!")
+
+        # -----------------------------------------
+        # ABA 3: NOVA QUESTÃO
+        # -----------------------------------------
+        with tab_questao:
+            st.markdown("#### ✍️ Cadastrar Questão Completa")
+            
+            with Session(get_engine()) as session:
+                bancas = session.query(Banca).all()
+                assuntos = session.query(Assunto).all()
+                opcoes_banca = {b.sigla: b.id for b in bancas}
+                opcoes_assunto = {f"{a.disciplina.nome} - {a.nome}": a.id for a in assuntos} if assuntos else {}
+            
+            if not opcoes_banca or not opcoes_assunto:
+                st.warning("⚠️ Você precisa cadastrar pelo menos 1 Banca, 1 Disciplina e 1 Assunto nas abas anteriores antes de criar uma questão.")
+            else:
+                with st.form("form_questao"):
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        banca_sel = st.selectbox("Banca", options=list(opcoes_banca.keys()))
+                    with col2:
+                        assunto_sel = st.selectbox("Disciplina - Assunto", options=list(opcoes_assunto.keys()))
+                    with col3:
+                        ano_q = st.number_input("Ano", min_value=1990, max_value=2030, value=2024)
+                    
+                    enunciado = st.text_area("Enunciado da Questão (Pode usar Markdown/HTML)", height=150)
                     
                     st.markdown("---")
-                    st.markdown("<h4 style='color: #3E2723; margin-bottom: 20px;'>Segurança</h4>", unsafe_allow_html=True)
-                    st.warning("Para redefinir a sua palavra-passe, termine a sessão e utilize a opção 'Esqueci minha palavra-passe' no ecrã de login.")
+                    st.markdown("**Alternativas**")
+                    alt_a = st.text_input("A)", key="alt_a")
+                    alt_b = st.text_input("B)", key="alt_b")
+                    alt_c = st.text_input("C)", key="alt_c")
+                    alt_d = st.text_input("D)", key="alt_d")
+                    alt_e = st.text_input("E)", key="alt_e")
                     
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    # O botão nativo do formulário SEMPRE precisa ser a última coisa dentro do "with st.form:"
-                    submit_perfil = st.form_submit_button("Salvar Alterações", type="primary", use_container_width=True)
+                    correta = st.radio("Qual é a alternativa correta?", options=["A", "B", "C", "D", "E"], horizontal=True)
                     
-                    if submit_perfil:
-                        st.success("✅ Layout de perfil testado com sucesso! Os dados serão gravados no banco na Fase 3.")
-                # --- FIM DO FORMULÁRIO ---
-                
-                # --- 2. ÁREA DE ADMINISTRAÇÃO (FORA DO FORMULÁRIO) ---
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown("<h4 style='color: #C0392B; margin-bottom: 20px;'>⚙️ Administração do Sistema</h4>", unsafe_allow_html=True)
-                st.info("Utilize este botão apenas uma vez para construir a estrutura do banco de dados no Supabase.")
-                
-                # Note que este botão "st.button" está alinhado com o "with st.form:", logo, está FORA dele!
-                if st.button("🚨 [ADMIN] Construir Tabelas no Supabase", type="primary", use_container_width=True):
-                    try:
-                        from database import init_db
-                        init_db()
-                        st.success("✅ SUCESSO! A Engenharia da Fase 3 foi injetada no Supabase! Verifique o painel do banco de dados.")
-                        st.balloons()
-                    except Exception as e:
-                        st.error(f"❌ Erro ao criar tabelas: {e}")
-                
-                st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown("---")
+                    comentario = st.text_area("Comentário do Professor (Opcional)", placeholder="Explique por que a alternativa está correta...")
+                    
+                    if st.form_submit_button("💾 Gravar Questão no Banco", type="primary", use_container_width=True):
+                        with Session(get_engine()) as session:
+                            try:
+                                # 1. Cria a Questão
+                                nova_q = Questao(
+                                    enunciado_html=enunciado,
+                                    ano=ano_q,
+                                    banca_id=opcoes_banca[banca_sel],
+                                    assunto_id=opcoes_assunto[assunto_sel],
+                                    comentario_html=comentario
+                                )
+                                session.add(nova_q)
+                                session.flush() # Salva temporariamente para pegar o ID gerado
+                                
+                                # 2. Cria as Alternativas vinculadas ao ID da Questão
+                                alternativas_obj = [
+                                    Alternativa(questao_id=nova_q.id, texto_html=alt_a, letra="A", is_correta=(correta=="A")),
+                                    Alternativa(questao_id=nova_q.id, texto_html=alt_b, letra="B", is_correta=(correta=="B")),
+                                    Alternativa(questao_id=nova_q.id, texto_html=alt_c, letra="C", is_correta=(correta=="C")),
+                                    Alternativa(questao_id=nova_q.id, texto_html=alt_d, letra="D", is_correta=(correta=="D")),
+                                    Alternativa(questao_id=nova_q.id, texto_html=alt_e, letra="E", is_correta=(correta=="E"))
+                                ]
+                                session.add_all(alternativas_obj)
+                                session.commit()
+                                
+                                st.success("🎉 Questão gravada com sucesso no Supabase! Ela já está pronta para ser resolvida.")
+                                st.balloons()
+                            except Exception as e:
+                                session.rollback()
+                                st.error(f"Erro Crítico: {e}")
