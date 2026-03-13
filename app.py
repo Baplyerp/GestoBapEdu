@@ -204,7 +204,9 @@ else:
         st.markdown("## 👤 Meu Perfil")
         st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Gerencie as suas informações pessoais e configurações de segurança.</p>", unsafe_allow_html=True)
         
-        # Avatar gigante do Perfil
+        # Gerar URL do avatar para usar na tela principal
+        email_usuario = st.session_state.utilizador.email
+        inicial = email_usuario[0].upper()
         url_avatar_grande = f"https://ui-avatars.com/api/?name={inicial}&background=3E2723&color=D4AF37&rounded=true&bold=true&size=256"
 
         col_foto, col_dados = st.columns([1, 2])
@@ -227,7 +229,7 @@ else:
                 st.markdown('<div class="baply-card" style="border-left-color: #3E2723;">', unsafe_allow_html=True)
                 st.markdown("<h4 style='color: #3E2723; margin-bottom: 20px;'>Dados da Conta</h4>", unsafe_allow_html=True)
                 
-                # --- O FORMULÁRIO (Envelope Fechado) ---
+                # --- 1. INÍCIO DO FORMULÁRIO ---
                 with st.form("form_perfil"):
                     st.text_input("E-mail de Acesso (Fixo)", value=email_usuario, disabled=True)
                     nome_input = st.text_input("Nome de Exibição", placeholder="Ex: Jean Dias")
@@ -238,20 +240,19 @@ else:
                     st.warning("Para redefinir a sua palavra-passe, termine a sessão e utilize a opção 'Esqueci minha palavra-passe' no ecrã de login.")
                     
                     st.markdown("<br>", unsafe_allow_html=True)
+                    # O botão nativo do formulário SEMPRE precisa ser a última coisa dentro do "with st.form:"
                     submit_perfil = st.form_submit_button("Salvar Alterações", type="primary", use_container_width=True)
                     
                     if submit_perfil:
                         st.success("✅ Layout de perfil testado com sucesso! Os dados serão gravados no banco na Fase 3.")
+                # --- FIM DO FORMULÁRIO ---
                 
-                # --- FORA DO FORMULÁRIO (Mas ainda dentro do cartão) ---
-                
-                # ==========================================
-                # 🚨 ÁREA DE ADMINISTRAÇÃO TEMPORÁRIA (Para criar o banco)
-                # ==========================================
+                # --- 2. ÁREA DE ADMINISTRAÇÃO (FORA DO FORMULÁRIO) ---
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.markdown("<h4 style='color: #C0392B; margin-bottom: 20px;'>⚙️ Administração do Sistema</h4>", unsafe_allow_html=True)
                 st.info("Utilize este botão apenas uma vez para construir a estrutura do banco de dados no Supabase.")
                 
+                # Note que este botão "st.button" está alinhado com o "with st.form:", logo, está FORA dele!
                 if st.button("🚨 [ADMIN] Construir Tabelas no Supabase", type="primary", use_container_width=True):
                     try:
                         from database import init_db
@@ -260,12 +261,5 @@ else:
                         st.balloons()
                     except Exception as e:
                         st.error(f"❌ Erro ao criar tabelas: {e}")
-                # ==========================================
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-                    submit_perfil = st.form_submit_button("Salvar Alterações", type="primary", use_container_width=True)
-                    
-                    if submit_perfil:
-                        st.success("✅ Layout de perfil testado com sucesso! Os dados serão gravados no banco na Fase 3.")
                 
                 st.markdown('</div>', unsafe_allow_html=True)
