@@ -5,6 +5,11 @@ import numpy as np
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
+# ==========================================
+# 🎨 IDENTIDADE VISUAL (Substitua o link abaixo)
+# ==========================================
+URL_LOGO_BAPLY = "https://upload.wikimedia.org/wikipedia/commons/c/ca/1x1.png" # <- COLE O LINK RAW DA LOGO AQUI
+
 # 1. Configuração Inicial
 st.set_page_config(page_title="GestoBap Edu", page_icon="🐝", layout="wide")
 
@@ -30,9 +35,14 @@ if 'utilizador' not in st.session_state:
 if st.session_state.utilizador is None:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.image("https://upload.wikimedia.org/wikipedia/commons/c/ca/1x1.png", width=80) # Placeholder Logo
-        st.markdown("<h2 style='text-align: center; color: #D4AF37;'>🐝 GestoBap Edu</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #7F8C8D;'>Acesso Restrito à Plataforma de Elite</p>", unsafe_allow_html=True)
+        # LOGO E TÍTULO NO LOGIN (Aumentado e Elegante)
+        st.markdown(f"""
+            <div style='text-align: center; margin-bottom: 20px;'>
+                <img src='{URL_LOGO_BAPLY}' width='160' style='margin-bottom: 15px;'>
+                <h2 style='color: #D4AF37; margin-top: 0px;'>🐝 GestoBap Edu</h2>
+                <p style='color: #7F8C8D; margin-top: -10px;'>Acesso Restrito à Plataforma de Elite</p>
+            </div>
+        """, unsafe_allow_html=True)
         
         tab_login, tab_registo = st.tabs(["Entrar", "Criar Conta"])
         
@@ -55,7 +65,7 @@ if st.session_state.utilizador is None:
                 if st.button("Enviar link de recuperação", use_container_width=True):
                     try:
                         supabase.auth.reset_password_email(recup_email)
-                        st.success("📩 Link enviado! Verifique a sua caixa de entrada para criar uma nova senha.")
+                        st.success("📩 Link enviado! Verifique a sua caixa de entrada.")
                     except Exception as e:
                         st.error("❌ Erro ao solicitar recuperação. Verifique o e-mail digitado.")
 
@@ -69,7 +79,7 @@ if st.session_state.utilizador is None:
                 try:
                     resposta = supabase.auth.sign_up({"email": email_novo, "password": senha_nova})
                     st.success("🎉 Quase lá! Enviamos um link de confirmação para o seu e-mail.")
-                    st.warning("⚠️ Importante: Verifique a sua caixa de entrada (e a pasta de Spam). Clique no link do e-mail para ativar a conta.")
+                    st.warning("⚠️ Importante: Verifique a sua caixa de entrada (e Spam). Clique no link para ativar a conta.")
                 except Exception as e:
                     st.error(f"❌ Erro ao registar: {e}")
 
@@ -77,24 +87,13 @@ if st.session_state.utilizador is None:
 # 🏛️ A PLATAFORMA (Logado)
 # ==========================================
 else:
-    # CSS ATUALIZADO: Fundo Branco e Listra Marrom Baply
+    # CSS ATUALIZADO
     st.markdown("""
         <style>
-        /* Fundo principal limpo e branco (Setor do meio) */
         .stApp { background-color: #FFFFFF; }
-        
-        /* Barra lateral com um leve off-white para desgrudar do centro e a listra marrom forte na direita */
-        [data-testid="stSidebar"] { 
-            background-color: #FAFAFA; 
-            border-right: 6px solid #3E2723; /* A listra estilo Sweet Home! */
-        }
-        
-        /* Textos da barra lateral em Marrom Escuro */
+        [data-testid="stSidebar"] { background-color: #FAFAFA; border-right: 6px solid #3E2723; }
         [data-testid="stSidebar"] * { color: #3E2723 !important; }
-        
-        /* Ajuste do contraste dos textos principais do meio */
         h1, h2, h3, h4, p { color: #2C3E50; }
-        
         .baply-card {
             background-color: #FFFFFF; padding: 20px; border-radius: 12px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.06); border-left: 6px solid #D4AF37; 
@@ -108,20 +107,16 @@ else:
 
     # MENU LATERAL ANIMADO
     with st.sidebar:
-        # 1. A LOGO DA PLATAFORMA
-        # Dica: Quando tiver a imagem no GitHub, troque o link abaixo por "BAPLY.jpg" ou o nome do seu arquivo
-        url_logo_baply = "https://raw.githubusercontent.com/Baplyerp/GestoBapEdu/refs/heads/main/logo_baply.png" # Substitua pelo link ou caminho da logo
-        
+        # LOGO E TÍTULO NA BARRA LATERAL (Tamanho Aumentado)
         st.markdown(f"""
             <div style='text-align: center; padding-top: 10px;'>
-                <img src='{url_logo_baply}' width='80' style='margin-bottom: 10px;'>
-                <h2 style='color: #D4AF37; margin-top: 0px;'>GestoBap</h2>
+                <img src='{URL_LOGO_BAPLY}' width='150' style='margin-bottom: 10px;'>
+                <h2 style='color: #D4AF37; margin-top: 0px;'>🐝 GestoBap</h2>
             </div>
         """, unsafe_allow_html=True)
         
         st.markdown("---")
         
-        # 2. O MENU ANIMADO (Atualizado com Meu Perfil)
         selecao = option_menu(
             menu_title=None, 
             options=["Hub Central", "Resolver Questões", "Meu Desempenho", "Zona de Estudo", "Meu Perfil"],
@@ -137,10 +132,9 @@ else:
         
         st.markdown("---")
         
-        # 3. O AVATAR DO USUÁRIO (Miniatura)
+        # O AVATAR DO USUÁRIO
         email_usuario = st.session_state.utilizador.email
         inicial = email_usuario[0].upper()
-        # Gerador automático de avatar com as cores da Baply (Marrom e Ouro)
         url_avatar = f"https://ui-avatars.com/api/?name={inicial}&background=3E2723&color=D4AF37&rounded=true&bold=true"
         
         st.markdown(f"""
@@ -155,7 +149,6 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        # Botão de Sair
         if st.button("Sair da Conta 🚪", use_container_width=True):
             supabase.auth.sign_out()
             st.session_state.utilizador = None
@@ -206,14 +199,12 @@ else:
     elif selecao == "Zona de Estudo":
         st.title("🧠 Zona de Estudo")
         st.info("Gerenciador Pomodoro.")
-
+        
     elif selecao == "Meu Perfil":
         st.markdown("## 👤 Meu Perfil")
         st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Gerencie as suas informações pessoais e configurações de segurança.</p>", unsafe_allow_html=True)
         
-        # Gerar URL do avatar para usar na tela principal
-        email_usuario = st.session_state.utilizador.email
-        inicial = email_usuario[0].upper()
+        # Avatar gigante do Perfil
         url_avatar_grande = f"https://ui-avatars.com/api/?name={inicial}&background=3E2723&color=D4AF37&rounded=true&bold=true&size=256"
 
         col_foto, col_dados = st.columns([1, 2])
