@@ -28,7 +28,6 @@ if 'utilizador' not in st.session_state:
 # 🔐 ECRÃ DE LOGIN E REGISTO
 # ==========================================
 if st.session_state.utilizador is None:
-    # Centraliza o login na tela
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.image("https://upload.wikimedia.org/wikipedia/commons/c/ca/1x1.png", width=80) # Placeholder Logo
@@ -37,6 +36,7 @@ if st.session_state.utilizador is None:
         
         tab_login, tab_registo = st.tabs(["Entrar", "Criar Conta"])
         
+        # --- ABA DE LOGIN ---
         with tab_login:
             email_login = st.text_input("Email", key="login_email")
             senha_login = st.text_input("Palavra-passe", type="password", key="login_senha")
@@ -48,7 +48,19 @@ if st.session_state.utilizador is None:
                     st.rerun()
                 except Exception as e:
                     st.error("❌ Credenciais inválidas. Verifique se confirmou o seu e-mail.")
-                    
+            
+            # NOVO: Esqueci minha senha
+            with st.expander("Esqueci minha palavra-passe"):
+                recup_email = st.text_input("Digite o seu e-mail de registo:", key="recup_email")
+                if st.button("Enviar link de recuperação", use_container_width=True):
+                    try:
+                        # O Supabase envia o email de reset automaticamente
+                        supabase.auth.reset_password_email(recup_email)
+                        st.success("📩 Link enviado! Verifique a sua caixa de entrada para criar uma nova senha.")
+                    except Exception as e:
+                        st.error("❌ Erro ao solicitar recuperação. Verifique o e-mail digitado.")
+
+        # --- ABA DE REGISTO ---            
         with tab_registo:
             st.info("Crie o seu perfil isolado. Os seus dados de estudo são privados.")
             email_novo = st.text_input("Novo Email", key="reg_email")
@@ -58,7 +70,7 @@ if st.session_state.utilizador is None:
                 try:
                     resposta = supabase.auth.sign_up({"email": email_novo, "password": senha_nova})
                     st.success("🎉 Quase lá! Enviamos um link de confirmação para o seu e-mail.")
-                    st.warning("⚠️ Importante: Verifique a sua caixa de entrada (e a pasta de Spam). Clique no link do e-mail para ativar a sua conta antes de fazer o login.")
+                    st.warning("⚠️ Importante: Verifique a sua caixa de entrada (e a pasta de Spam). Clique no link do e-mail para ativar a conta.")
                 except Exception as e:
                     st.error(f"❌ Erro ao registar: {e}")
 
@@ -66,12 +78,17 @@ if st.session_state.utilizador is None:
 # 🏛️ A PLATAFORMA (Logado)
 # ==========================================
 else:
-    # INJEÇÃO DE CSS BAPLY
+    # CSS ATUALIZADO: Barra lateral clara e elegante
     st.markdown("""
         <style>
         .stApp { background-color: #FDFCF8; }
-        [data-testid="stSidebar"] { background-color: #3E2723; }
-        [data-testid="stSidebar"] * { color: #F8F9F9 !important; }
+        
+        /* Barra lateral clareada (Bege Baply) */
+        [data-testid="stSidebar"] { background-color: #FAF6F0; border-right: 1px solid #EAE0D5; }
+        
+        /* Textos da barra lateral em Marrom Escuro para contraste */
+        [data-testid="stSidebar"] * { color: #3E2723 !important; }
+        
         .baply-card {
             background-color: #FFFFFF; padding: 20px; border-radius: 12px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.04); border-left: 6px solid #D4AF37; height: 100%;
@@ -81,22 +98,21 @@ else:
         </style>
     """, unsafe_allow_html=True)
 
-    # MENU LATERAL ANIMADO
+    # MENU LATERAL ANIMADO (Cores Ajustadas)
     with st.sidebar:
         st.markdown("<h2 style='text-align: center; color: #D4AF37;'>🐝 GestoBap</h2>", unsafe_allow_html=True)
         st.markdown("---")
         
-        # A mágica do Option Menu!
         selecao = option_menu(
             menu_title=None, 
             options=["Hub Central", "Resolver Questões", "Meu Desempenho", "Zona de Estudo"],
-            icons=["house", "bullseye", "bar-chart-line", "brain"], # Ícones do Bootstrap
+            icons=["house", "bullseye", "bar-chart-line", "brain"],
             default_index=0,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
-                "icon": {"color": "#D4AF37", "font-size": "18px"}, # Ícones dourados
-                "nav-link": {"font-size": "15px", "text-align": "left", "margin":"5px 0px", "--hover-color": "#5D4037"}, # Efeito Hover Marrom Claro
-                "nav-link-selected": {"background-color": "#D4AF37", "color": "#3E2723", "font-weight": "bold"}, # Selecionado fica Ouro com texto Marrom
+                "icon": {"color": "#D4AF37", "font-size": "18px"}, 
+                "nav-link": {"font-size": "15px", "text-align": "left", "margin":"5px 0px", "--hover-color": "#EAE0D5"}, # Hover mais suave
+                "nav-link-selected": {"background-color": "#D4AF37", "color": "#FFFFFF", "font-weight": "bold"}, # Ouro com texto branco
             }
         )
         
@@ -107,7 +123,7 @@ else:
             st.session_state.utilizador = None
             st.rerun()
 
-    # ROTEADOR DE PÁGINAS (Muda o conteúdo conforme o clique no menu)
+    # ROTEADOR DE PÁGINAS
     if selecao == "Hub Central":
         st.markdown("## 🏛️ Hub Central de Estudos")
         st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Bem-vindo de volta! Aqui está o resumo da sua jornada.</p>", unsafe_allow_html=True)
@@ -143,12 +159,12 @@ else:
 
     elif selecao == "Resolver Questões":
         st.title("🎯 Resolver Questões")
-        st.info("Aqui entrará o motor de questões conectado ao seu perfil!")
+        st.info("O motor de questões será conectado aqui!")
 
     elif selecao == "Meu Desempenho":
         st.title("📊 Meu Desempenho")
-        st.info("Aqui entrarão as estatísticas individuais de acertos da sua conta.")
+        st.info("Estatísticas da conta.")
         
     elif selecao == "Zona de Estudo":
         st.title("🧠 Zona de Estudo")
-        st.info("Aqui entrará o gerenciador de ciclos Pomodoro.")
+        st.info("Gerenciador Pomodoro.")
