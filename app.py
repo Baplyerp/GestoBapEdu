@@ -49,12 +49,11 @@ if st.session_state.utilizador is None:
                 except Exception as e:
                     st.error("❌ Credenciais inválidas. Verifique se confirmou o seu e-mail.")
             
-            # NOVO: Esqueci minha senha
+            # Esqueci minha senha
             with st.expander("Esqueci minha palavra-passe"):
                 recup_email = st.text_input("Digite o seu e-mail de registo:", key="recup_email")
                 if st.button("Enviar link de recuperação", use_container_width=True):
                     try:
-                        # O Supabase envia o email de reset automaticamente
                         supabase.auth.reset_password_email(recup_email)
                         st.success("📩 Link enviado! Verifique a sua caixa de entrada para criar uma nova senha.")
                     except Exception as e:
@@ -78,27 +77,36 @@ if st.session_state.utilizador is None:
 # 🏛️ A PLATAFORMA (Logado)
 # ==========================================
 else:
-    # CSS ATUALIZADO: Barra lateral clara e elegante
+    # CSS ATUALIZADO: Fundo Branco e Listra Marrom Baply
     st.markdown("""
         <style>
-        .stApp { background-color: #FDFCF8; }
+        /* Fundo principal limpo e branco (Setor do meio) */
+        .stApp { background-color: #FFFFFF; }
         
-        /* Barra lateral clareada (Bege Baply) */
-        [data-testid="stSidebar"] { background-color: #FAF6F0; border-right: 1px solid #EAE0D5; }
+        /* Barra lateral com um leve off-white para desgrudar do centro e a listra marrom forte na direita */
+        [data-testid="stSidebar"] { 
+            background-color: #FAFAFA; 
+            border-right: 6px solid #3E2723; /* A listra estilo Sweet Home! */
+        }
         
-        /* Textos da barra lateral em Marrom Escuro para contraste */
+        /* Textos da barra lateral em Marrom Escuro */
         [data-testid="stSidebar"] * { color: #3E2723 !important; }
+        
+        /* Ajuste do contraste dos textos principais do meio */
+        h1, h2, h3, h4, p { color: #2C3E50; }
         
         .baply-card {
             background-color: #FFFFFF; padding: 20px; border-radius: 12px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.04); border-left: 6px solid #D4AF37; height: 100%;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.06); border-left: 6px solid #D4AF37; 
+            border-top: 1px solid #F2F3F4; border-right: 1px solid #F2F3F4; border-bottom: 1px solid #F2F3F4;
+            height: 100%;
         }
         .card-title { color: #95A5A6; font-size: 0.85rem; text-transform: uppercase; font-weight: 700; margin-bottom: 5px; }
-        .card-metric { color: #2C3E50; font-size: 1.4rem; font-weight: 800; }
+        .card-metric { color: #3E2723; font-size: 1.4rem; font-weight: 800; }
         </style>
     """, unsafe_allow_html=True)
 
-    # MENU LATERAL ANIMADO (Cores Ajustadas)
+    # MENU LATERAL ANIMADO
     with st.sidebar:
         st.markdown("<h2 style='text-align: center; color: #D4AF37;'>🐝 GestoBap</h2>", unsafe_allow_html=True)
         st.markdown("---")
@@ -106,13 +114,13 @@ else:
         selecao = option_menu(
             menu_title=None, 
             options=["Hub Central", "Resolver Questões", "Meu Desempenho", "Zona de Estudo"],
-            icons=["house", "bullseye", "bar-chart-line", "brain"],
+            icons=["house", "bullseye", "bar-chart-line", "stopwatch"], # Ícone stopwatch corrigido!
             default_index=0,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
                 "icon": {"color": "#D4AF37", "font-size": "18px"}, 
-                "nav-link": {"font-size": "15px", "text-align": "left", "margin":"5px 0px", "--hover-color": "#EAE0D5"}, # Hover mais suave
-                "nav-link-selected": {"background-color": "#D4AF37", "color": "#FFFFFF", "font-weight": "bold"}, # Ouro com texto branco
+                "nav-link": {"font-size": "15px", "text-align": "left", "margin":"5px 0px", "--hover-color": "#EAE0D5"}, 
+                "nav-link-selected": {"background-color": "#3E2723", "color": "#D4AF37", "font-weight": "bold"}, # Selecionado fica Marrom com texto Dourado!
             }
         )
         
