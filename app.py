@@ -110,7 +110,7 @@ else:
     with st.sidebar:
         # 1. A LOGO DA PLATAFORMA
         # Dica: Quando tiver a imagem no GitHub, troque o link abaixo por "BAPLY.jpg" ou o nome do seu arquivo
-        url_logo_baply = "https://github.com/Baplyerp/GestoBapEdu/blob/main/logo_baply.png?raw=true" # Substitua pelo link ou caminho da logo
+        url_logo_baply = "https://github.com/Baplyerp/GestoBapEdu/blob/6e4d572f0323dc1165ca474e81c7ae71f299970d/logo_baply.png" # Substitua pelo link ou caminho da logo
         
         st.markdown(f"""
             <div style='text-align: center; padding-top: 10px;'>
