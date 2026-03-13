@@ -50,10 +50,10 @@ if st.session_state.utilizador is None:
         
         if st.button("Registar Conta 📝", use_container_width=True):
             try:
-                # O Supabase cria o utilizador automaticamente
                 resposta = supabase.auth.sign_up({"email": email_novo, "password": senha_nova})
-                st.success("✅ Registo efetuado com sucesso! Já pode fazer o login no separador 'Entrar'.")
-                # Nota: O Supabase pode enviar um email de confirmação dependendo das suas definições.
+                # MENSAGEM PREMIUM DE UX:
+                st.success("🎉 Quase lá! Enviamos um link de confirmação para o seu e-mail.")
+                st.warning("⚠️ Importante: Verifique a sua caixa de entrada (e a pasta de Spam). Clique no link do e-mail para ativar a sua conta antes de fazer o login.")
             except Exception as e:
                 st.error(f"❌ Erro ao registar: {e}")
 
