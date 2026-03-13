@@ -121,11 +121,11 @@ else:
         
         st.markdown("---")
         
-        # 2. O MENU ANIMADO
+        # 2. O MENU ANIMADO (Atualizado com Meu Perfil)
         selecao = option_menu(
             menu_title=None, 
-            options=["Hub Central", "Resolver Questões", "Meu Desempenho", "Zona de Estudo"],
-            icons=["house", "bullseye", "bar-chart-line", "stopwatch"],
+            options=["Hub Central", "Resolver Questões", "Meu Desempenho", "Zona de Estudo", "Meu Perfil"],
+            icons=["house", "bullseye", "bar-chart-line", "stopwatch", "person-badge"],
             default_index=0,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
@@ -206,3 +206,49 @@ else:
     elif selecao == "Zona de Estudo":
         st.title("🧠 Zona de Estudo")
         st.info("Gerenciador Pomodoro.")
+
+    elif selecao == "Meu Perfil":
+        st.markdown("## 👤 Meu Perfil")
+        st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Gerencie as suas informações pessoais e configurações de segurança.</p>", unsafe_allow_html=True)
+        
+        # Gerar URL do avatar para usar na tela principal
+        email_usuario = st.session_state.utilizador.email
+        inicial = email_usuario[0].upper()
+        url_avatar_grande = f"https://ui-avatars.com/api/?name={inicial}&background=3E2723&color=D4AF37&rounded=true&bold=true&size=256"
+
+        col_foto, col_dados = st.columns([1, 2])
+        
+        with col_foto:
+            st.markdown(f"""
+                <div class="baply-card" style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                    <img src="{url_avatar_grande}" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid #D4AF37; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
+                    <h4 style="color: #3E2723; margin-bottom: 0px;">{inicial}</h4>
+                    <p style="color: #7F8C8D; font-size: 0.85rem;">Estudante de Elite</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("📸 Alterar Avatar (Em breve)", use_container_width=True):
+                st.toast("A conexão com o Supabase Storage será ativada na próxima fase!")
+
+        with col_dados:
+            with st.container():
+                st.markdown('<div class="baply-card" style="border-left-color: #3E2723;">', unsafe_allow_html=True)
+                st.markdown("<h4 style='color: #3E2723; margin-bottom: 20px;'>Dados da Conta</h4>", unsafe_allow_html=True)
+                
+                with st.form("form_perfil"):
+                    st.text_input("E-mail de Acesso (Fixo)", value=email_usuario, disabled=True)
+                    nome_input = st.text_input("Nome de Exibição", placeholder="Ex: Jean Dias")
+                    foco_input = st.text_input("Foco / Edital Principal", placeholder="Ex: Prefeitura de Catende / TGP")
+                    
+                    st.markdown("---")
+                    st.markdown("<h4 style='color: #3E2723; margin-bottom: 20px;'>Segurança</h4>", unsafe_allow_html=True)
+                    st.warning("Para redefinir a sua palavra-passe, termine a sessão e utilize a opção 'Esqueci minha palavra-passe' no ecrã de login.")
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    submit_perfil = st.form_submit_button("Salvar Alterações", type="primary", use_container_width=True)
+                    
+                    if submit_perfil:
+                        st.success("✅ Layout de perfil testado com sucesso! Os dados serão gravados no banco na Fase 3.")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
