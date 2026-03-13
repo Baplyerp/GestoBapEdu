@@ -1,3 +1,4 @@
 streamlit
 sqlalchemy
 psycopg2-binary
+supabase
