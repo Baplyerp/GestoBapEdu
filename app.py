@@ -235,6 +235,26 @@ else:
                     st.markdown("---")
                     st.markdown("<h4 style='color: #3E2723; margin-bottom: 20px;'>Segurança</h4>", unsafe_allow_html=True)
                     st.warning("Para redefinir a sua palavra-passe, termine a sessão e utilize a opção 'Esqueci minha palavra-passe' no ecrã de login.")
+                    st.markdown("---")
+                    st.markdown("<h4 style='color: #3E2723; margin-bottom: 20px;'>Segurança</h4>", unsafe_allow_html=True)
+                    st.warning("Para redefinir a sua palavra-passe, termine a sessão e utilize a opção 'Esqueci minha palavra-passe' no ecrã de login.")
+                    
+                    # ==========================================
+                    # 🚨 ÁREA DE ADMINISTRAÇÃO TEMPORÁRIA (Para criar o banco)
+                    # ==========================================
+                    st.markdown("---")
+                    st.markdown("<h4 style='color: #C0392B; margin-bottom: 20px;'>⚙️ Administração do Sistema</h4>", unsafe_allow_html=True)
+                    st.info("Utilize este botão apenas uma vez para construir a estrutura do banco de dados no Supabase.")
+                    
+                    if st.button("🚨 [ADMIN] Construir Tabelas no Supabase", type="primary", use_container_width=True):
+                        try:
+                            from database import init_db
+                            init_db()
+                            st.success("✅ SUCESSO! A Engenharia da Fase 3 foi injetada no Supabase! Verifique o painel do banco de dados.")
+                            st.balloons()
+                        except Exception as e:
+                            st.error(f"❌ Erro ao criar tabelas: {e}")
+                    # ==========================================
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     submit_perfil = st.form_submit_button("Salvar Alterações", type="primary", use_container_width=True)
