@@ -8,7 +8,7 @@ from streamlit_option_menu import option_menu
 # ==========================================
 # 🎨 IDENTIDADE VISUAL (Substitua o link abaixo)
 # ==========================================
-URL_LOGO_BAPLY = "https://upload.wikimedia.org/wikipedia/commons/c/ca/1x1.png" # <- COLE O LINK RAW DA LOGO AQUI
+URL_LOGO_BAPLY = "https://raw.githubusercontent.com/Baplyerp/GestoBapEdu/refs/heads/main/logo_baply.png" # <- COLE O LINK RAW DA LOGO AQUI
 
 # 1. Configuração Inicial
 st.set_page_config(page_title="GestoBap Edu", page_icon="🐝", layout="wide")
