@@ -108,24 +108,54 @@ else:
 
     # MENU LATERAL ANIMADO
     with st.sidebar:
-        st.markdown("<h2 style='text-align: center; color: #D4AF37;'>🐝 GestoBap</h2>", unsafe_allow_html=True)
+        # 1. A LOGO DA PLATAFORMA
+        # Dica: Quando tiver a imagem no GitHub, troque o link abaixo por "BAPLY.jpg" ou o nome do seu arquivo
+        url_logo_baply = "https://upload.wikimedia.org/wikipedia/commons/c/ca/1x1.png" # Substitua pelo link ou caminho da logo
+        
+        st.markdown(f"""
+            <div style='text-align: center; padding-top: 10px;'>
+                <img src='{url_logo_baply}' width='80' style='margin-bottom: 10px;'>
+                <h2 style='color: #D4AF37; margin-top: 0px;'>GestoBap</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
         st.markdown("---")
         
+        # 2. O MENU ANIMADO
         selecao = option_menu(
             menu_title=None, 
             options=["Hub Central", "Resolver Questões", "Meu Desempenho", "Zona de Estudo"],
-            icons=["house", "bullseye", "bar-chart-line", "stopwatch"], # Ícone stopwatch corrigido!
+            icons=["house", "bullseye", "bar-chart-line", "stopwatch"],
             default_index=0,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
                 "icon": {"color": "#D4AF37", "font-size": "18px"}, 
                 "nav-link": {"font-size": "15px", "text-align": "left", "margin":"5px 0px", "--hover-color": "#EAE0D5"}, 
-                "nav-link-selected": {"background-color": "#3E2723", "color": "#D4AF37", "font-weight": "bold"}, # Selecionado fica Marrom com texto Dourado!
+                "nav-link-selected": {"background-color": "#3E2723", "color": "#D4AF37", "font-weight": "bold"}, 
             }
         )
         
         st.markdown("---")
-        st.caption(f"👤 **Logado como:**\n{st.session_state.utilizador.email}")
+        
+        # 3. O AVATAR DO USUÁRIO (Miniatura)
+        email_usuario = st.session_state.utilizador.email
+        inicial = email_usuario[0].upper()
+        # Gerador automático de avatar com as cores da Baply (Marrom e Ouro)
+        url_avatar = f"https://ui-avatars.com/api/?name={inicial}&background=3E2723&color=D4AF37&rounded=true&bold=true"
+        
+        st.markdown(f"""
+            <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; padding: 10px; background-color: #FFFFFF; border-radius: 10px; border: 1px solid #EAE0D5;">
+                <img src="{url_avatar}" style="width: 45px; height: 45px; border-radius: 50%; border: 2px solid #D4AF37; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="line-height: 1.2; overflow: hidden;">
+                    <span style="font-size: 0.75rem; color: #7F8C8D; text-transform: uppercase; font-weight: bold;">Logado como</span><br>
+                    <span style="font-size: 0.9rem; color: #3E2723; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">
+                        {email_usuario}
+                    </span>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Botão de Sair
         if st.button("Sair da Conta 🚪", use_container_width=True):
             supabase.auth.sign_out()
             st.session_state.utilizador = None
