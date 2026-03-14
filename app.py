@@ -253,7 +253,9 @@ else:
                             session.commit()
                             st.success(f"✅ Assunto {nome_assunto} salvo!")
 
+       # -----------------------------------------
         # ABA 3: NOVA QUESTÃO (Avançada)
+        # -----------------------------------------
         with tab_questao:
             st.markdown("#### ✍️ Cadastrar Questão Completa")
             
@@ -268,6 +270,16 @@ else:
             else:
                 from streamlit_quill import st_quill # Importamos o editor rico
                 
+                # A MÁGICA AQUI: O controle de formato fica FORA do formulário para reagir na hora!
+                st.markdown("**1. Defina o formato da questão:**")
+                tipo_q = st.radio(
+                    "Formato:", 
+                    ["Múltipla Escolha (ABCDE)", "Múltipla Escolha (ABCD)", "Certo/Errado (CE)"], 
+                    horizontal=True, 
+                    label_visibility="collapsed"
+                )
+                
+                st.markdown("**2. Preencha os dados:**")
                 with st.form("form_questao"):
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -281,10 +293,9 @@ else:
                     enunciado = st_quill(placeholder="Cole o texto aqui, use negrito, tabelas, links...", key="quill_enunciado")
                     
                     st.markdown("---")
-                    tipo_q = st.radio("Formato da Questão:", ["Múltipla Escolha (ABCDE)", "Múltipla Escolha (ABCD)", "Certo/Errado (CE)"], horizontal=True)
+                    st.markdown(f"**Alternativas ({tipo_q}):**")
                     
-                    st.markdown("**Alternativas:**")
-                    
+                    # Como o tipo_q foi escolhido fora, o formulário já nasce com os campos certos!
                     if tipo_q == "Múltipla Escolha (ABCDE)":
                         alt_a = st.text_input("A)", key="ma_a")
                         alt_b = st.text_input("B)", key="ma_b")
@@ -301,7 +312,7 @@ else:
                         correta = st.radio("Gabarito Correto:", ["A", "B", "C", "D"], horizontal=True)
                         
                     else:
-                        st.info("No formato C/E, as alternativas 'Certo' e 'Errado' são geradas automaticamente.")
+                        st.info("No formato C/E, as alternativas 'Certo' e 'Errado' são geradas automaticamente. Selecione apenas o gabarito correto abaixo:")
                         correta = st.radio("Gabarito Correto:", ["Certo", "Errado"], horizontal=True)
                     
                     st.markdown("---")
@@ -346,7 +357,7 @@ else:
                                 except Exception as e:
                                     session.rollback()
                                     st.error(f"Erro Crítico: {e}")
-
+                                    
     # -----------------------------------------
     # ABA RECUPERADA: MEU PERFIL
     # -----------------------------------------
