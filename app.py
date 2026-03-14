@@ -343,9 +343,10 @@ else:
         try:
             from backend.models import Banca, Disciplina, Assunto, Questao, Alternativa, DificuldadeEnum, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum
 
-            tab_banca, tab_disc, tab_orgao, tab_questao = st.tabs(["🏛️ 1. Bancas", "📚 2. Disciplinas & Assuntos", "🏢 3. Órgãos/Cargos", "✍️ 4. Nova Questão"])
+            # 🚀 ADICIONADA UMA NOVA ABA: "GERENCIAR QUESTÕES"
+            tab_banca, tab_disc, tab_orgao, tab_questao, tab_gerenciar = st.tabs(["🏛️ 1. Bancas", "📚 2. Disciplinas & Assuntos", "🏢 3. Órgãos/Cargos", "✍️ 4. Nova Questão", "⚙️ 5. Gerenciar"])
 
-            # ABA 1: BANCAS
+            # ABA 1: BANCAS (Intacta)
             with tab_banca:
                 st.markdown("#### Cadastrar Nova Banca")
                 with st.form("form_banca"):
@@ -362,7 +363,7 @@ else:
                         except Exception as e:
                             st.error(f"Erro ao salvar: Já existe? Detalhes: {e}")
 
-            # ABA 2: DISCIPLINAS E ASSUNTOS
+            # ABA 2: DISCIPLINAS E ASSUNTOS (Intacta)
             with tab_disc:
                 col_d, col_a = st.columns(2)
                 with col_d:
@@ -396,7 +397,7 @@ else:
                                 session.commit()
                                 st.success(f"✅ Assunto {nome_assunto} salvo!")
 
-            # ABA 3: ÓRGÃOS E CARGOS
+            # ABA 3: ÓRGÃOS E CARGOS (Intacta)
             with tab_orgao:
                 st.markdown("#### Gestão de Órgãos e Cargos")
                 col_o, col_c = st.columns(2)
@@ -413,7 +414,7 @@ else:
                             with Session(get_engine()) as s: 
                                 s.add(Cargo(nome=n_cargo)); s.commit(); st.success("✅ Cargo Salvo!")
 
-            # ABA 4: NOVA QUESTÃO (Avançada)
+            # ABA 4: NOVA QUESTÃO (Intacta)
             with tab_questao:
                 st.markdown("#### ✍️ Cadastrar Questão Completa")
                 
@@ -532,6 +533,56 @@ else:
                                     except Exception as e:
                                         session.rollback()
                                         st.error(f"Erro Crítico: {e}")
+                                        
+            # 🚀 ABA 5: GERENCIAR (O NOVO CÓDIGO)
+            with tab_gerenciar:
+                st.markdown("#### ⚙️ Gerenciar e Corrigir Questões")
+                st.info("Busque por questões cadastradas para visualizar seu Código Único ou solicitar edição.")
+                
+                with Session(get_engine()) as session:
+                    # Carrega as opções para o filtro simples do professor
+                    bancas_prof = session.query(Banca).all()
+                    assuntos_prof = session.query(Assunto).all()
+                    
+                    c1, c2 = st.columns(2)
+                    filtro_banca = c1.multiselect("Filtrar por Banca", options=[b.sigla for b in bancas_prof])
+                    filtro_assunto = c2.multiselect("Filtrar por Assunto", options=[a.nome for a in assuntos_prof])
+                    
+                    if st.button("🔍 Buscar Questões", type="primary"):
+                        query_prof = session.query(Questao).join(Banca).join(Assunto)
+                        
+                        if filtro_banca:
+                            query_prof = query_prof.filter(Banca.sigla.in_(filtro_banca))
+                        if filtro_assunto:
+                            query_prof = query_prof.filter(Assunto.nome.in_(filtro_assunto))
+                            
+                        resultados = query_prof.all()
+                        
+                        if not resultados:
+                            st.warning("Nenhuma questão encontrada com esses filtros.")
+                        else:
+                            st.success(f"{len(resultados)} questões encontradas!")
+                            
+                            # Renderiza a lista de questões com o Código Único Baply
+                            for q in resultados:
+                                # Lógica do Código Único: Três primeiras letras da disciplina + ID
+                                prefixo_disc = q.assunto.disciplina.nome[:3].upper()
+                                codigo_unico = f"BAP-{prefixo_disc}{q.id:04d}" # Ex: BAP-AUD0001
+                                
+                                with st.expander(f"🏷️ {codigo_unico} | {q.banca.sigla} - {q.ano}"):
+                                    st.markdown(f"**Assunto:** {q.assunto.nome}")
+                                    st.markdown("**Enunciado:**")
+                                    # Limitamos o tamanho do enunciado na visualização rápida
+                                    st.markdown(f"<div style='background: #FAFAFA; padding: 10px; border-radius: 5px; font-size: 0.9rem; max-height: 100px; overflow-y: auto;'>{q.enunciado_html}</div>", unsafe_allow_html=True)
+                                    
+                                    col_edit, col_del = st.columns(2)
+                                    with col_edit:
+                                        if st.button(f"✏️ Editar (Em Breve)", key=f"edit_{q.id}", use_container_width=True):
+                                            st.toast(f"Módulo de edição para {codigo_unico} será ativado na Fase 4!")
+                                    with col_del:
+                                        if st.button(f"🗑️ Inativar", key=f"del_{q.id}", use_container_width=True):
+                                            st.toast("Soft delete será implementado.")
+                                            
         except Exception as e:
             st.warning("⚠️ Atualização necessária! Vá à aba 'Meu Perfil' e clique em 'Construir Tabelas no Supabase'.")
 
