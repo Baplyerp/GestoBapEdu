@@ -81,7 +81,6 @@ class Orgao(Base, AuditMixin):
     __tablename__ = 'tb_orgao'
     id: Mapped[int] = mapped_column(primary_key=True)
     nome: Mapped[str] = mapped_column(String(150), unique=True, index=True)
-    # 🚀 CAMPO PARA LOGO ADICIONADO
     logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
 
 class Cargo(Base, AuditMixin):
@@ -125,7 +124,6 @@ class ConcursoRadar(Base, AuditMixin):
     banca_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_banca.id'))
     orgao_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_orgao.id'))
     
-    # Relacionamentos para facilitar a busca (Pencil/Borracha)
     banca: Mapped[Optional["Banca"]] = relationship()
     orgao: Mapped[Optional["Orgao"]] = relationship()
     
@@ -146,13 +144,19 @@ class EditalItem(Base):
     lido_teoria: Mapped[bool] = mapped_column(default=False)
     revisado: Mapped[bool] = mapped_column(default=False)
 
+# --- 🚀 MUDANÇA AQUI: SESSÃO DE ESTUDO ADAPTADA ---
 class SessaoEstudo(Base, AuditMixin):
+    """Registro manual de horas (espelho do Estudaqui)"""
     __tablename__ = 'tb_sessao_estudo'
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     disciplina_id: Mapped[int] = mapped_column(ForeignKey('tb_disciplina.id'))
     duracao_segundos: Mapped[int] = mapped_column(Integer) 
     foco_score: Mapped[int] = mapped_column(Integer, default=3)
+    # 🚀 NOVO: Para o seu diário de bordo
+    observacoes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 🚀 NOVO: Permite lançar estudos com datas passadas
+    data_sessao: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 class Simulado(Base, AuditMixin):
     __tablename__ = 'tb_simulado'
