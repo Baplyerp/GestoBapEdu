@@ -2,8 +2,8 @@
 from datetime import datetime, timezone
 import uuid
 import enum
-from typing import Optional # <-- IMPORTANTE: Adicionado para campos nulos
-from sqlalchemy import String, Text, Integer, Boolean, ForeignKey, DateTime, Enum
+from typing import Optional 
+from sqlalchemy import String, Text, Integer, Boolean, ForeignKey, DateTime, Enum, Float
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 
@@ -15,7 +15,7 @@ class AuditMixin:
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     is_active: Mapped[bool] = mapped_column(default=True, index=True)
 
-# --- ENUMS PARA FILTROS INTELIGENTES ---
+# --- ENUMS PARA FILTROS E REGRAS ---
 class EscolaridadeEnum(enum.Enum):
     MEDIO = "Médio"
     SUPERIOR = "Superior"
@@ -30,7 +30,13 @@ class CarreiraEnum(enum.Enum):
     SAUDE = "Saúde"
     OUTROS = "Outros"
 
-# --- CATÁLOGO ---
+# 🚀 NOVO: REGRAS DE EDITAL
+class RegraPenalidadeEnum(enum.Enum):
+    PADRAO = "Padrão (1 Certa = +1 | Errada = 0)"
+    CEBRASPE_1X1 = "CEBRASPE 1x1 (1 Errada anula 1 Certa)"
+    CEBRASPE_MEIO = "CEBRASPE 0.5 (1 Errada anula 0.5 Certa)"
+
+# --- CATÁLOGO BASE ---
 class Disciplina(Base, AuditMixin):
     __tablename__ = 'tb_disciplina'
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -60,7 +66,7 @@ class Cargo(Base, AuditMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     nome: Mapped[str] = mapped_column(String(150), index=True)
 
-# --- AVALIAÇÃO ---
+# --- MOTOR DE AVALIAÇÃO (QUESTÕES) ---
 class DificuldadeEnum(enum.Enum):
     FACIL = "FACIL"
     MEDIA = "MEDIA"
@@ -73,24 +79,18 @@ class Questao(Base, AuditMixin):
     enunciado_html: Mapped[str] = mapped_column(Text) 
     ano: Mapped[int] = mapped_column(index=True)
     dificuldade: Mapped[DificuldadeEnum] = mapped_column(Enum(DificuldadeEnum), default=DificuldadeEnum.MEDIA)
-    
-    # 🚀 NOVO CAMPO: Filtro de Inéditas adicionado
     is_inedita: Mapped[bool] = mapped_column(default=False, index=True)
     
-    # Novos campos de metadados (Usando Optional)
     escolaridade: Mapped[Optional[EscolaridadeEnum]] = mapped_column(Enum(EscolaridadeEnum), nullable=True, index=True)
     carreira: Mapped[Optional[CarreiraEnum]] = mapped_column(Enum(CarreiraEnum), nullable=True, index=True)
-    
     comentario_html: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     video_explicacao_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
-    # Chaves Estrangeiras (IDs Opcionais usam Optional)
     assunto_id: Mapped[int] = mapped_column(ForeignKey('tb_assunto.id'), index=True)
     banca_id: Mapped[int] = mapped_column(ForeignKey('tb_banca.id'), index=True)
     orgao_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_orgao.id'), index=True, nullable=True)
     cargo_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_cargo.id'), index=True, nullable=True)
     
-    # RELACIONAMENTOS (Se a ForeignKey é opcional, o relacionamento também é)
     banca: Mapped["Banca"] = relationship()
     assunto: Mapped["Assunto"] = relationship()
     orgao: Mapped[Optional["Orgao"]] = relationship()
@@ -101,12 +101,34 @@ class Alternativa(Base):
     __tablename__ = 'tb_alternativa'
     id: Mapped[int] = mapped_column(primary_key=True)
     questao_id: Mapped[int] = mapped_column(ForeignKey('tb_questao.id'))
-    
     texto_html: Mapped[str] = mapped_column(Text) 
     is_correta: Mapped[bool] = mapped_column(default=False)
     letra: Mapped[str] = mapped_column(String(1)) 
-    
     questao: Mapped["Questao"] = relationship(back_populates="alternativas")
+
+# 🚀 NOVO: ARQUITETURA DO SIMULADO DE EDITAL
+class Simulado(Base, AuditMixin):
+    __tablename__ = 'tb_simulado'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    regra_penalidade: Mapped[RegraPenalidadeEnum] = mapped_column(Enum(RegraPenalidadeEnum), default=RegraPenalidadeEnum.PADRAO)
+    
+    orgao_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_orgao.id'), nullable=True)
+    cargo_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_cargo.id'), nullable=True)
+    
+    orgao: Mapped[Optional["Orgao"]] = relationship()
+    cargo: Mapped[Optional["Cargo"]] = relationship()
+    
+    questoes_vinculadas: Mapped[list["SimuladoQuestao"]] = relationship(back_populates="simulado", cascade="all, delete-orphan")
+
+class SimuladoQuestao(Base):
+    __tablename__ = 'tb_simulado_questao'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    simulado_id: Mapped[int] = mapped_column(ForeignKey('tb_simulado.id'), index=True)
+    questao_id: Mapped[int] = mapped_column(ForeignKey('tb_questao.id'), index=True)
+    
+    simulado: Mapped["Simulado"] = relationship(back_populates="questoes_vinculadas")
+    questao: Mapped["Questao"] = relationship()
 
 # --- ENGAJAMENTO ---
 class HistoricoResolucao(Base):
@@ -114,10 +136,7 @@ class HistoricoResolucao(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     questao_id: Mapped[int] = mapped_column(ForeignKey('tb_questao.id'), index=True)
-    
-    # Usando Optional
     alternativa_selecionada_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_alternativa.id'), nullable=True)
     acertou: Mapped[bool] = mapped_column(index=True)
     tempo_gasto_segundos: Mapped[Optional[int]] = mapped_column(nullable=True)
-    
     resolvido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
