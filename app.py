@@ -186,37 +186,32 @@ else:
 
         from database import get_engine
         from sqlalchemy.orm import Session, joinedload
-        from backend.models import Questao, HistoricoResolucao, Assunto
+        from backend.models import Questao, HistoricoResolucao, Assunto, Banca # Importe a Banca aqui também
         import uuid
 
-        # --- 1. MEMÓRIA DO QUIZ ---
         if 'idx_questao' not in st.session_state:
             st.session_state.idx_questao = 0
         if 'estado_resposta' not in st.session_state:
             st.session_state.estado_resposta = "aguardando"
-        if 'lista_questoes' not in st.session_state:
-            with Session(get_engine()) as session:
-                todas_questoes = session.query(Questao).all()
-                st.session_state.lista_questoes = [q.id for q in todas_questoes]
+        
+        # Carregar lista de IDs
+        with Session(get_engine()) as session:
+            todas = session.query(Questao.id).all()
+            ids_questoes = [q.id for q in todas]
 
-        ids_questoes = st.session_state.lista_questoes
-
-        # --- 2. LÓGICA DE EXIBIÇÃO ---
         if not ids_questoes:
             st.info("📭 Nenhuma questão encontrada. Cadastre uma na 'Área do Professor'!")
-            
         elif st.session_state.idx_questao >= len(ids_questoes):
-            st.success("🎉 Sensacional! Você finalizou todas as questões.")
-            if st.button("🔄 Reiniciar Bateria", type="primary"):
+            st.success("🎉 Você finalizou todas as questões!")
+            if st.button("🔄 Reiniciar Bateria"):
                 st.session_state.idx_questao = 0
                 st.session_state.estado_resposta = "aguardando"
                 st.rerun()
-        
         else:
-            # SE CHEGOU AQUI, TEMOS UMA QUESTÃO PARA MOSTRAR
             id_atual = ids_questoes[st.session_state.idx_questao]
-
+            
             with Session(get_engine()) as session:
+                # O joinedload agora vai funcionar porque corrigimos o models.py!
                 questao = session.query(Questao).options(
                     joinedload(Questao.banca),
                     joinedload(Questao.assunto).joinedload(Assunto.disciplina),
@@ -224,7 +219,7 @@ else:
                 ).filter(Questao.id == id_atual).first()
                 
                 if questao:
-                    # Cabeçalho
+                    # --- RENDERIZAÇÃO (Tudo aqui dentro) ---
                     st.markdown(f"""
                         <div style='background-color: #FAFAFA; padding: 10px 15px; border-radius: 8px; border: 1px solid #EAE0D5; display: flex; justify-content: space-between;'>
                             <span style='color: #7F8C8D; font-size: 0.85rem;'><b>Banca:</b> {questao.banca.sigla} | <b>Ano:</b> {questao.ano} | <b>Assunto:</b> {questao.assunto.disciplina.nome} - {questao.assunto.nome}</span>
@@ -236,10 +231,8 @@ else:
                     st.markdown(f"<div style='font-size: 1.1rem; color: #2C3E50;'>{questao.enunciado_html}</div>", unsafe_allow_html=True)
                     st.markdown("<br>", unsafe_allow_html=True)
 
-                    # Alternativas
                     opcoes_letras = []
                     mapa_alt = {}
-                    
                     st.markdown("**Alternativas:**")
                     for alt in sorted(questao.alternativas, key=lambda x: x.letra):
                         st.markdown(f"<div style='margin-bottom: 10px; padding: 10px; border-radius: 5px; background-color: #FFFFFF; border: 1px solid #F2F3F4;'><b>{alt.letra})</b> {alt.texto_html}</div>", unsafe_allow_html=True)
@@ -248,13 +241,10 @@ else:
 
                     st.markdown("---")
 
-                    # Resposta
                     if st.session_state.estado_resposta == "aguardando":
-                        resp_sel = st.radio("Sua resposta:", options=opcoes_letras, horizontal=True)
+                        resp_sel = st.radio("Sua resposta:", options=opcoes_letras, horizontal=True, key=f"radio_{id_atual}")
                         if st.button("Confirmar Resposta ✅", type="primary", use_container_width=True):
                             alt_escolhida = mapa_alt[resp_sel]
-                            
-                            # Salva no banco
                             novo_h = HistoricoResolucao(
                                 user_id=uuid.UUID(st.session_state.utilizador.id),
                                 questao_id=questao.id,
@@ -263,7 +253,6 @@ else:
                             )
                             session.add(novo_h)
                             session.commit()
-
                             st.session_state.estado_resposta = "respondido"
                             st.session_state.acertou_ultima = alt_escolhida.is_correta
                             st.session_state.letra_correta = next(a.letra for a in questao.alternativas if a.is_correta)
