@@ -1,4 +1,3 @@
-
 import streamlit as st
 import os
 import pandas as pd
@@ -182,9 +181,98 @@ else:
             """, unsafe_allow_html=True)
 
     elif selecao == "Resolver Questões":
-        st.title("🎯 Resolver Questões")
-        st.info("O motor de questões será conectado aqui!")
+        st.markdown("## 🎯 Resolver Questões")
+        st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Sua bateria de estudos ativa.</p>", unsafe_allow_html=True)
 
+        from database import get_engine
+        from sqlalchemy.orm import Session, joinedload
+        from backend.models import Questao, HistoricoResolucao, Assunto, Banca # Importe a Banca aqui também
+        import uuid
+
+        if 'idx_questao' not in st.session_state:
+            st.session_state.idx_questao = 0
+        if 'estado_resposta' not in st.session_state:
+            st.session_state.estado_resposta = "aguardando"
+        
+        # Carregar lista de IDs
+        with Session(get_engine()) as session:
+            todas = session.query(Questao.id).all()
+            ids_questoes = [q.id for q in todas]
+
+        if not ids_questoes:
+            st.info("📭 Nenhuma questão encontrada. Cadastre uma na 'Área do Professor'!")
+        elif st.session_state.idx_questao >= len(ids_questoes):
+            st.success("🎉 Você finalizou todas as questões!")
+            if st.button("🔄 Reiniciar Bateria"):
+                st.session_state.idx_questao = 0
+                st.session_state.estado_resposta = "aguardando"
+                st.rerun()
+        else:
+            id_atual = ids_questoes[st.session_state.idx_questao]
+            
+            with Session(get_engine()) as session:
+                # O joinedload agora vai funcionar porque corrigimos o models.py!
+                questao = session.query(Questao).options(
+                    joinedload(Questao.banca),
+                    joinedload(Questao.assunto).joinedload(Assunto.disciplina),
+                    joinedload(Questao.alternativas)
+                ).filter(Questao.id == id_atual).first()
+                
+                if questao:
+                    # --- RENDERIZAÇÃO (Tudo aqui dentro) ---
+                    st.markdown(f"""
+                        <div style='background-color: #FAFAFA; padding: 10px 15px; border-radius: 8px; border: 1px solid #EAE0D5; display: flex; justify-content: space-between;'>
+                            <span style='color: #7F8C8D; font-size: 0.85rem;'><b>Banca:</b> {questao.banca.sigla} | <b>Ano:</b> {questao.ano} | <b>Assunto:</b> {questao.assunto.disciplina.nome} - {questao.assunto.nome}</span>
+                            <span style='color: #D4AF37; font-weight: bold;'>Questão {st.session_state.idx_questao + 1} de {len(ids_questoes)}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-size: 1.1rem; color: #2C3E50;'>{questao.enunciado_html}</div>", unsafe_allow_html=True)
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+                    opcoes_letras = []
+                    mapa_alt = {}
+                    st.markdown("**Alternativas:**")
+                    for alt in sorted(questao.alternativas, key=lambda x: x.letra):
+                        st.markdown(f"<div style='margin-bottom: 10px; padding: 10px; border-radius: 5px; background-color: #FFFFFF; border: 1px solid #F2F3F4;'><b>{alt.letra})</b> {alt.texto_html}</div>", unsafe_allow_html=True)
+                        opcoes_letras.append(alt.letra)
+                        mapa_alt[alt.letra] = alt
+
+                    st.markdown("---")
+
+                    if st.session_state.estado_resposta == "aguardando":
+                        resp_sel = st.radio("Sua resposta:", options=opcoes_letras, horizontal=True, key=f"radio_{id_atual}")
+                        if st.button("Confirmar Resposta ✅", type="primary", use_container_width=True):
+                            alt_escolhida = mapa_alt[resp_sel]
+                            novo_h = HistoricoResolucao(
+                                user_id=uuid.UUID(st.session_state.utilizador.id),
+                                questao_id=questao.id,
+                                alternativa_selecionada_id=alt_escolhida.id,
+                                acertou=alt_escolhida.is_correta
+                            )
+                            session.add(novo_h)
+                            session.commit()
+                            st.session_state.estado_resposta = "respondido"
+                            st.session_state.acertou_ultima = alt_escolhida.is_correta
+                            st.session_state.letra_correta = next(a.letra for a in questao.alternativas if a.is_correta)
+                            st.session_state.comentario_prof = questao.comentario_html
+                            st.rerun()
+
+                    elif st.session_state.estado_resposta == "respondido":
+                        if st.session_state.acertou_ultima:
+                            st.success(f"🎯 Correto! Alternativa **{st.session_state.letra_correta}**.")
+                        else:
+                            st.error(f"❌ Incorreto. A certa era **{st.session_state.letra_correta}**.")
+
+                        if st.session_state.comentario_prof:
+                            st.info(f"**Comentário:**\n{st.session_state.comentario_prof}")
+
+                        if st.button("Próxima Questão ➡️", type="primary", use_container_width=True):
+                            st.session_state.idx_questao += 1
+                            st.session_state.estado_resposta = "aguardando"
+                            st.rerun()
+                            
     elif selecao == "Meu Desempenho":
         st.title("📊 Meu Desempenho")
         st.info("Estatísticas da conta.")
@@ -254,7 +342,9 @@ else:
                             session.commit()
                             st.success(f"✅ Assunto {nome_assunto} salvo!")
 
+       # -----------------------------------------
         # ABA 3: NOVA QUESTÃO (Avançada)
+        # -----------------------------------------
         with tab_questao:
             st.markdown("#### ✍️ Cadastrar Questão Completa")
             
@@ -269,6 +359,16 @@ else:
             else:
                 from streamlit_quill import st_quill # Importamos o editor rico
                 
+                # A MÁGICA AQUI: O controle de formato fica FORA do formulário para reagir na hora!
+                st.markdown("**1. Defina o formato da questão:**")
+                tipo_q = st.radio(
+                    "Formato:", 
+                    ["Múltipla Escolha (ABCDE)", "Múltipla Escolha (ABCD)", "Certo/Errado (CE)"], 
+                    horizontal=True, 
+                    label_visibility="collapsed"
+                )
+                
+                st.markdown("**2. Preencha os dados:**")
                 with st.form("form_questao"):
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -282,10 +382,9 @@ else:
                     enunciado = st_quill(placeholder="Cole o texto aqui, use negrito, tabelas, links...", key="quill_enunciado")
                     
                     st.markdown("---")
-                    tipo_q = st.radio("Formato da Questão:", ["Múltipla Escolha (ABCDE)", "Múltipla Escolha (ABCD)", "Certo/Errado (CE)"], horizontal=True)
+                    st.markdown(f"**Alternativas ({tipo_q}):**")
                     
-                    st.markdown("**Alternativas:**")
-                    
+                    # Como o tipo_q foi escolhido fora, o formulário já nasce com os campos certos!
                     if tipo_q == "Múltipla Escolha (ABCDE)":
                         alt_a = st.text_input("A)", key="ma_a")
                         alt_b = st.text_input("B)", key="ma_b")
@@ -302,7 +401,7 @@ else:
                         correta = st.radio("Gabarito Correto:", ["A", "B", "C", "D"], horizontal=True)
                         
                     else:
-                        st.info("No formato C/E, as alternativas 'Certo' e 'Errado' são geradas automaticamente.")
+                        st.info("No formato C/E, as alternativas 'Certo' e 'Errado' são geradas automaticamente. Selecione apenas o gabarito correto abaixo:")
                         correta = st.radio("Gabarito Correto:", ["Certo", "Errado"], horizontal=True)
                     
                     st.markdown("---")
@@ -347,7 +446,7 @@ else:
                                 except Exception as e:
                                     session.rollback()
                                     st.error(f"Erro Crítico: {e}")
-
+                                    
     # -----------------------------------------
     # ABA RECUPERADA: MEU PERFIL
     # -----------------------------------------
