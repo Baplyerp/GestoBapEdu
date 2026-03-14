@@ -125,19 +125,18 @@ else:
         
         st.markdown("---")
         
+        # ... código anterior ...
         email_usuario = st.session_state.utilizador.email
         inicial = email_usuario[0].upper()
         url_avatar = f"https://ui-avatars.com/api/?name={inicial}&background=3E2723&color=D4AF37&rounded=true&bold=true"
         
+        # CORREÇÃO: Bloco HTML contínuo, sem linhas em branco no meio para não quebrar o Markdown
         st.markdown(f"""
             <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; padding: 10px; background-color: #FFFFFF; border-radius: 10px; border: 1px solid #EAE0D5;">
                 <img src="{url_avatar}" style="width: 45px; height: 45px; border-radius: 50%; border: 2px solid #D4AF37; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 <div style="line-height: 1.2; overflow: hidden;">
                     <span style="font-size: 0.75rem; color: #7F8C8D; text-transform: uppercase; font-weight: bold;">Logado como</span><br>
-
-                    <span style="font-size: 0.9rem; color: #3E2723; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">
-                        {email_usuario}
-                    </span>
+                    <span style="font-size: 0.9rem; color: #3E2723; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{email_usuario}</span>
                 </div>
             </div>
         """, unsafe_allow_html=True)
