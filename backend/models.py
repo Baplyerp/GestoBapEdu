@@ -125,11 +125,15 @@ class ConcursoRadar(Base, AuditMixin):
     banca_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_banca.id'))
     orgao_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_orgao.id'))
     
+    # 🚀 A CORREÇÃO ESTÁ AQUI: Adicionando as pontes de relacionamento
+    banca: Mapped[Optional["Banca"]] = relationship()
+    orgao: Mapped[Optional["Orgao"]] = relationship()
+    
     status: Mapped[StatusConcursoEnum] = mapped_column(Enum(StatusConcursoEnum), default=StatusConcursoEnum.PREVISTO)
     prioridade: Mapped[PrioridadeConcursoEnum] = mapped_column(Enum(PrioridadeConcursoEnum), default=PrioridadeConcursoEnum.SECUNDARIO)
     data_prova: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
-    # Campo para Autópsia (Fase Finalizado)
+    # Campos para Autópsia
     resultado_status: Mapped[Optional[ResultadoConcursoEnum]] = mapped_column(Enum(ResultadoConcursoEnum), nullable=True)
     nota_real: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     nota_corte: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
