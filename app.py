@@ -495,7 +495,7 @@ else:
             st.error("⚠️ Banco não sincronizado. Vá em 'Meu Perfil'.")
             st.stop()
 
-        # Tabs internas para manter a organização e evitar carregamento pesado
+        # Tabs internas
         tab_radar, tab_ciclo, tab_edital, tab_leiseca = st.tabs([
             "🎯 Radar de Missões", 
             "🔄 Ciclo de Foco", 
@@ -505,115 +505,177 @@ else:
 
         # --- 🎯 MÓDULO 1: RADAR DE MISSÕES & AUTÓPSIA ---
         with tab_radar:
-            col_inf1, col_inf2 = st.columns([1.5, 1])
+            col_lista, col_formulario = st.columns([1.6, 1])
             
-            with col_inf2:
-                st.markdown("#### ➕ Nova Missão (Concurso)")
-                with st.form("form_novo_concurso"):
-                    nome_concurso = st.text_input("Nome do Certame", placeholder="Ex: SEFAZ/PE - Auditor")
+            # --- 1. GESTÃO DO ESTADO DE EDIÇÃO (A "Borracha") ---
+            if "id_editando" not in st.session_state:
+                st.session_state.id_editando = None
+
+            with col_formulario:
+                # Cabeçalho dinâmico do formulário
+                if st.session_state.id_editando:
+                    st.markdown("#### ✏️ Editar Missão")
+                    if st.button("❌ Cancelar Edição"):
+                        st.session_state.id_editando = None
+                        st.rerun()
+                else:
+                    st.markdown("#### ➕ Nova Missão (Concurso)")
+
+                with st.form("form_radar_concurso"):
+                    # Carregar dados se estiver em modo edição
+                    dados_pre_prenchidos = None
+                    if st.session_state.id_editando:
+                        with Session(get_engine()) as session:
+                            dados_pre_prenchidos = session.query(ConcursoRadar).get(st.session_state.id_editando)
+                    
+                    nome_concurso = st.text_input("Nome do Certame", 
+                                                 value=dados_pre_prenchidos.nome if dados_pre_prenchidos else "",
+                                                 placeholder="Ex: SEFAZ/PE - Auditor")
                     
                     with Session(get_engine()) as session:
                         bancas_r = session.query(Banca).all()
                         orgaos_r = session.query(Orgao).all()
                     
-                    c1, c2 = st.columns(2)
-                    banca_sel = c1.selectbox("Banca", options=["N/D"] + [b.sigla for b in bancas_r])
-                    orgao_sel = c2.selectbox("Órgão", options=["N/D"] + [o.nome for o in orgaos_r])
+                    c_f1, c_f2 = st.columns(2)
+                    banca_sel = c_f1.selectbox("Banca", options=["N/D"] + [b.sigla for b in bancas_r],
+                                               index=0 if not dados_pre_prenchidos or not dados_pre_prenchidos.banca 
+                                               else [b.sigla for b in bancas_r].index(dados_pre_prenchidos.banca.sigla) + 1)
                     
-                    status_sel = st.selectbox("Status Atual", [e.value for e in StatusConcursoEnum])
-                    prioridade_sel = st.selectbox("Prioridade", [e.value for e in PrioridadeConcursoEnum])
-                    data_p = st.date_input("Data da Prova (Se houver)", value=None)
+                    orgao_sel = c_f2.selectbox("Órgão", options=["N/D"] + [o.nome for o in orgaos_r],
+                                               index=0 if not dados_pre_prenchidos or not dados_pre_prenchidos.orgao 
+                                               else [o.nome for o in orgaos_r].index(dados_pre_prenchidos.orgao.nome) + 1)
                     
-                    if st.form_submit_button("Lançar Missão no Radar 🚀", type="primary", use_container_width=True):
+                    status_sel = st.selectbox("Status Atual", [e.value for e in StatusConcursoEnum],
+                                              index=0 if not dados_pre_prenchidos 
+                                              else [e.value for e in StatusConcursoEnum].index(dados_pre_prenchidos.status.value))
+                    
+                    prioridade_sel = st.selectbox("Prioridade", [e.value for e in PrioridadeConcursoEnum],
+                                                  index=0 if not dados_pre_prenchidos 
+                                                  else [e.value for e in PrioridadeConcursoEnum].index(dados_pre_prenchidos.prioridade.value))
+                    
+                    data_p = st.date_input("Data da Prova", value=dados_pre_prenchidos.data_prova if dados_pre_prenchidos else None)
+                    
+                    label_btn = "Atualizar Missão 💾" if st.session_state.id_editando else "Lançar no Radar 🚀"
+                    
+                    if st.form_submit_button(label_btn, type="primary", use_container_width=True):
                         if not nome_concurso:
-                            st.error("Nome é obrigatório.")
+                            st.error("Dê um nome à missão.")
                         else:
                             with Session(get_engine()) as session:
                                 try:
-                                    # Busca IDs correspondentes
                                     id_b = next((b.id for b in bancas_r if b.sigla == banca_sel), None)
                                     id_o = next((o.id for o in orgaos_r if o.nome == orgao_sel), None)
                                     
-                                    novo_c = ConcursoRadar(
-                                        user_id=uuid.UUID(st.session_state.utilizador.id),
-                                        nome=nome_concurso,
-                                        banca_id=id_b,
-                                        status=next(e for e in StatusConcursoEnum if e.value == status_sel),
-                                        prioridade=next(e for e in PrioridadeConcursoEnum if e.value == prioridade_sel),
-                                        data_prova=data_p
-                                    )
-                                    session.add(novo_c)
+                                    if st.session_state.id_editando:
+                                        # Lógica de Update (A "Borracha")
+                                        missao = session.query(ConcursoRadar).get(st.session_state.id_editando)
+                                        missao.nome = nome_concurso
+                                        missao.banca_id = id_b
+                                        missao.orgao_id = id_o
+                                        missao.status = next(e for e in StatusConcursoEnum if e.value == status_sel)
+                                        missao.prioridade = next(e for e in PrioridadeConcursoEnum if e.value == prioridade_sel)
+                                        missao.data_prova = data_p
+                                        st.session_state.id_editando = None
+                                        st.success("Missão atualizada!")
+                                    else:
+                                        # Lógica de Insert
+                                        novo_c = ConcursoRadar(
+                                            user_id=uuid.UUID(st.session_state.utilizador.id),
+                                            nome=nome_concurso, banca_id=id_b, orgao_id=id_o,
+                                            status=next(e for e in StatusConcursoEnum if e.value == status_sel),
+                                            prioridade=next(e for e in PrioridadeConcursoEnum if e.value == prioridade_sel),
+                                            data_prova=data_p
+                                        )
+                                        session.add(novo_c)
+                                        st.success(f"Missão {nome_concurso} lançada!")
+                                    
                                     session.commit()
-                                    st.success(f"Missão {nome_concurso} adicionada!")
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(f"Erro ao salvar: {e}")
+                                    st.error(f"Erro ao processar banco: {e}")
 
-            with col_inf1:
+            with col_lista:
                 st.markdown("#### 📡 Pipeline de Concursos")
-                
                 with Session(get_engine()) as session:
-                    minhas_missoes = session.query(ConcursoRadar).options(joinedload(ConcursoRadar.banca))\
+                    missoes = session.query(ConcursoRadar).options(joinedload(ConcursoRadar.banca), joinedload(ConcursoRadar.orgao))\
                         .filter_by(user_id=uuid.UUID(st.session_state.utilizador.id))\
                         .order_by(ConcursoRadar.data_prova.asc()).all()
                 
-                if not minhas_missoes:
-                    st.info("Seu radar está limpo. Cadastre seu primeiro objetivo ao lado.")
+                if not missoes:
+                    st.info("O seu radar está vazio. Use o formulário ao lado para começar.")
                 else:
-                    for c in minhas_missoes:
-                        # Estilização baseada na prioridade
-                        border_color = "#3E2723" if c.prioridade == PrioridadeConcursoEnum.FOCO_TOTAL else "#D4AF37"
-                        
-                        with st.expander(f"📌 {c.nome} | {c.status.value}"):
-                            st.markdown(f"""
-                                <div style='border-left: 5px solid {border_color}; padding-left: 15px;'>
-                                    <p style='margin-bottom: 5px;'><b>Banca:</b> {c.banca.sigla if c.banca else 'N/D'} | <b>Prioridade:</b> {c.prioridade.value}</p>
-                                    <p style='margin-bottom: 15px;'>📅 <b>Data da Prova:</b> {c.data_prova.strftime('%d/%m/%Y') if c.data_prova else 'A definir'}</p>
-                                </div>
-                            """, unsafe_allow_html=True)
+                    for c in missoes:
+                        with st.container():
+                            # Layout do Card: [Logo] [Texto] [Ações]
+                            c_logo, c_info, c_action = st.columns([0.4, 3, 0.4])
                             
-                            # 🧬 INTERFACE DE AUTÓPSIA (Apenas se finalizado/prova realizada)
-                            if c.status in [StatusConcursoEnum.PROVA_REALIZADA, StatusConcursoEnum.FINALIZADO]:
-                                st.markdown("---")
-                                st.markdown("#### 🩺 Autópsia da Prova (Seu 'Olho na Vaga' Pessoal)")
-                                with st.form(f"autopsia_{c.id}"):
-                                    col_r1, col_r2, col_r3 = st.columns(3)
-                                    res_status = col_r1.selectbox("Resultado Final", [e.value for e in ResultadoConcursoEnum], 
-                                                                  index=([e.value for e in ResultadoConcursoEnum].index(c.resultado_status.value) if c.resultado_status else 0))
-                                    n_real = col_r2.number_input("Sua Nota", value=c.nota_real or 0.0)
-                                    n_corte = col_r3.number_input("Nota de Corte", value=c.nota_corte or 0.0)
-                                    
-                                    posic = st.number_input("Sua Posição Final", value=c.posicao or 0, step=1)
-                                    
-                                    if st.form_submit_button("Registrar Desempenho Histórico"):
+                            with c_logo:
+                                if c.orgao and c.orgao.logo_url:
+                                    st.image(c.orgao.logo_url, width=50)
+                                else:
+                                    st.markdown("<h3 style='margin:0;'>🏛️</h3>", unsafe_allow_html=True)
+                            
+                            with c_info:
+                                border_c = "#3E2723" if c.prioridade == PrioridadeConcursoEnum.FOCO_TOTAL else "#D4AF37"
+                                st.markdown(f"""
+                                    <div style='border-left: 4px solid {border_c}; padding-left: 10px;'>
+                                        <b style='font-size: 1.1rem;'>{c.nome}</b><br>
+                                        <span style='color: #7F8C8D; font-size: 0.85rem;'>{c.status.value} • {c.banca.sigla if c.banca else 'N/D'}</span>
+                                    </div>
+                                """, unsafe_allow_html=True)
+                            
+                            with c_action:
+                                if st.button("✏️", key=f"edit_radar_{c.id}", help="Editar informações"):
+                                    st.session_state.id_editando = c.id
+                                    st.rerun()
+
+                            # Detalhes e Autópsia expandíveis
+                            with st.expander("Ver Cronograma / Autópsia de Prova"):
+                                col_d1, col_d2 = st.columns(2)
+                                col_d1.write(f"**Data da Prova:** {c.data_prova.strftime('%d/%m/%Y') if c.data_prova else 'A definir'}")
+                                col_d2.write(f"**Prioridade:** {c.prioridade.value}")
+
+                                # --- 🧬 SUB-MÓDULO AUTÓPSIA (Olho na Vaga Pessoal) ---
+                                if c.status in [StatusConcursoEnum.PROVA_REALIZADA, StatusConcursoEnum.FINALIZADO]:
+                                    st.markdown("---")
+                                    st.markdown("🩺 **Autópsia de Resultados**")
+                                    with st.form(f"form_auto_{c.id}"):
+                                        r1, r2, r3 = st.columns(3)
+                                        res_s = r1.selectbox("Resultado Final", [e.value for e in ResultadoConcursoEnum], 
+                                                             index=([e.value for e in ResultadoConcursoEnum].index(c.resultado_status.value) if c.resultado_status else 0))
+                                        n_r = r2.number_input("Sua Nota Real", value=c.nota_real or 0.0)
+                                        n_c = r3.number_input("Nota de Corte", value=c.nota_corte or 0.0)
+                                        
+                                        pos = st.number_input("Posição Final", value=c.posicao or 0, step=1)
+                                        
+                                        if st.form_submit_button("Gravar Autópsia"):
+                                            with Session(get_engine()) as session:
+                                                obj = session.query(ConcursoRadar).get(c.id)
+                                                obj.resultado_status = next(e for e in ResultadoConcursoEnum if e.value == res_s)
+                                                obj.nota_real, obj.nota_corte, obj.posicao = n_r, n_c, pos
+                                                session.commit()
+                                                st.success("Histórico atualizado!")
+                                                st.rerun()
+                                else:
+                                    if st.button("Confirmar Realização da Prova ✅", key=f"btn_done_{c.id}"):
                                         with Session(get_engine()) as session:
                                             db_c = session.query(ConcursoRadar).get(c.id)
-                                            db_c.resultado_status = next(e for e in ResultadoConcursoEnum if e.value == res_status)
-                                            db_c.nota_real = n_real
-                                            db_c.nota_corte = n_corte
-                                            db_c.posicao = posic
+                                            db_c.status = StatusConcursoEnum.PROVA_REALIZADA
                                             session.commit()
-                                            st.success("Autópsia registrada. Seus dados alimentaram o histórico global.")
                                             st.rerun()
-                            else:
-                                if st.button("Marcar como Prova Realizada ✅", key=f"btn_done_{c.id}"):
-                                    with Session(get_engine()) as session:
-                                        db_c = session.query(ConcursoRadar).get(c.id)
-                                        db_c.status = StatusConcursoEnum.PROVA_REALIZADA
-                                        session.commit()
-                                        st.rerun()
+                            st.markdown("---")
 
-        # --- 🔄 CICLO DE FOCO (EM CONSTRUÇÃO) ---
+        # --- 🔄 CICLO DE FOCO (PENDENTE FASE 2) ---
         with tab_ciclo:
-            st.info("🚀 O Motor de Ciclos baseado em Intercalação e Pomodoro será ativado na Fase 2.")
+            st.info("Em breve: Motor de Intercalação de Matérias com Cronômetro Pomodoro.")
 
-        # --- 🧬 EDITAL VIVO (EM CONSTRUÇÃO) ---
+        # --- 🧬 EDITAL VIVO (PENDENTE FASE 2) ---
         with tab_edital:
-            st.info("🧬 O Edital Vivo com progresso automatizado por questões será ativado na Fase 2.")
+            st.info("Em breve: Progresso automatizado de conteúdos baseado nas suas questões resolvidas.")
 
-        # --- 🔥 LEI SECA ---
+        # --- 🔥 LEI SECA (PENDENTE FASE 2) ---
         with tab_leiseca:
-            st.info("🔥 O Desafio de Micro-hábitos de Leitura de Legislação será ativado na Fase 2.")
+            st.info("Em breve: Gameficação da leitura de legislação (Streaks).")
         
     elif selecao == "Área do Professor":
         st.markdown("## 👨‍🏫 Área do Professor (Seed)")
@@ -683,10 +745,13 @@ else:
                 col_o, col_c = st.columns(2)
                 with col_o:
                     with st.form("form_orgao_add"):
-                        n_orgao = st.text_input("Nome do Órgão", placeholder="Ex: Prefeitura de Catende")
+                        n_orgao = st.text_input("Nome do Órgão")
+                        url_logo = st.text_input("URL da Logo (PNG/JPG)", placeholder="https://exemplo.com/logo.png")
                         if st.form_submit_button("Salvar Órgão", type="primary"):
                             with Session(get_engine()) as s: 
-                                s.add(Orgao(nome=n_orgao)); s.commit(); st.success("✅ Órgão Salvo!")
+                                s.add(Orgao(nome=n_orgao, logo_url=url_logo))
+                                s.commit()
+                                st.success("✅ Órgão Salvo!")
                 with col_c:
                     with st.form("form_cargo_add"):
                         n_cargo = st.text_input("Nome do Cargo", placeholder="Ex: Analista de Controle Interno")
