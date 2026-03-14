@@ -532,7 +532,7 @@ else:
                                 try:
                                     # Busca IDs correspondentes
                                     id_b = next((b.id for b in bancas_r if b.sigla == banca_sel), None)
-                                    id_o = next((o.nome for o in orgaos_r if o.nome == orgao_sel), None)
+                                    id_o = next((o.id for o in orgaos_r if o.nome == orgao_sel), None)
                                     
                                     novo_c = ConcursoRadar(
                                         user_id=uuid.UUID(st.session_state.utilizador.id),
