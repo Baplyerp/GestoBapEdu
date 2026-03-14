@@ -182,7 +182,7 @@ else:
 
     elif selecao == "Resolver Questões":
         st.markdown("## 🎯 Resolver Questões")
-        st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Sua bateria de estudos ativa.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Modo de Resolução de Alto Desempenho.</p>", unsafe_allow_html=True)
         
         from database import get_engine
         from sqlalchemy.orm import Session, joinedload
@@ -191,15 +191,14 @@ else:
         try:
             from backend.models import Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum
             
-            # --- 1. FILTRO INTELIGENTE (Otimizado com st.form) ---
-            with st.expander("🔍 Filtro Inteligente", expanded=False):
+            # --- 1. FILTRO INTELIGENTE (Geração de Caderno) ---
+            with st.expander("🔍 Criar Novo Caderno de Questões (Filtros)", expanded=False):
                 with Session(get_engine()) as session:
                     bancas_db = session.query(Banca).all()
                     materias_db = session.query(Disciplina).all()
                     orgaos_db = session.query(Orgao).all()
                     anos_db = session.query(Questao.ano).distinct().all()
                 
-                # 🛡️ ADICIONADO O FORMULÁRIO PARA CURAR A "ANSIEDADE" DO STREAMLIT
                 with st.form("form_filtro_aluno"):
                     col_f1, col_f2, col_f3 = st.columns(3)
                     with col_f1:
@@ -212,28 +211,25 @@ else:
                         f_ano = st.multiselect("Ano", options=[str(a[0]) for a in anos_db])
                         f_carreira = st.multiselect("Carreira", options=[c.value for c in CarreiraEnum])
 
-                    submit_filtro = st.form_submit_button("Aplicar Filtros e Gerar Caderno 🚀", type="primary", use_container_width=True)
-                
-                # A lógica de busca só roda se o botão do formulário for clicado
-                if submit_filtro:
-                    with Session(get_engine()) as session:
-                        query = session.query(Questao.id) 
-                        
-                        if f_banca: query = query.join(Banca).filter(Banca.sigla.in_(f_banca))
-                        if f_orgao: query = query.join(Orgao).filter(Orgao.nome.in_(f_orgao))
-                        if f_materia: query = query.join(Assunto).join(Disciplina).filter(Disciplina.nome.in_(f_materia))
-                        if f_ano: query = query.filter(Questao.ano.in_([int(a) for a in f_ano]))
-                        if f_escolaridade: query = query.filter(Questao.escolaridade.in_(f_escolaridade))
-                        if f_carreira: query = query.filter(Questao.carreira.in_(f_carreira))
-                        
-                        res_ids = [q[0] for q in query.all()]
-                        st.session_state.lista_questoes = res_ids
-                        st.session_state.idx_questao = 0
-                        st.session_state.estado_resposta = "aguardando"
-                        st.toast(f"Caderno gerado com {len(res_ids)} questões!")
-                        st.rerun()
+                    if st.form_submit_button("Gerar Caderno e Iniciar 🚀", type="primary", use_container_width=True):
+                        with Session(get_engine()) as session:
+                            query = session.query(Questao.id) 
+                            
+                            if f_banca: query = query.join(Banca).filter(Banca.sigla.in_(f_banca))
+                            if f_orgao: query = query.join(Orgao).filter(Orgao.nome.in_(f_orgao))
+                            if f_materia: query = query.join(Assunto).join(Disciplina).filter(Disciplina.nome.in_(f_materia))
+                            if f_ano: query = query.filter(Questao.ano.in_([int(a) for a in f_ano]))
+                            if f_escolaridade: query = query.filter(Questao.escolaridade.in_(f_escolaridade))
+                            if f_carreira: query = query.filter(Questao.carreira.in_(f_carreira))
+                            
+                            res_ids = [q[0] for q in query.all()]
+                            st.session_state.lista_questoes = res_ids
+                            st.session_state.idx_questao = 0
+                            st.session_state.estado_resposta = "aguardando"
+                            st.toast(f"Caderno gerado com {len(res_ids)} questões!")
+                            st.rerun()
 
-            # --- 2. GESTÃO DE SESSÃO E RENDERIZAÇÃO DA QUESTÃO (Intacta e Segura) ---
+            # --- 2. GESTÃO DO CADERNO ATUAL ---
             if 'idx_questao' not in st.session_state: st.session_state.idx_questao = 0
             if 'estado_resposta' not in st.session_state: st.session_state.estado_resposta = "aguardando"
             if 'lista_questoes' not in st.session_state:
@@ -242,11 +238,12 @@ else:
 
             ids_questoes = st.session_state.lista_questoes
 
+            # --- 3. MOTOR DE RENDERIZAÇÃO 1-CLICK ---
             if not ids_questoes:
-                st.info("📭 Nenhuma questão encontrada com esses filtros.")
+                st.info("📭 Seu caderno está vazio. Ajuste os filtros acima para buscar questões.")
             elif st.session_state.idx_questao >= len(ids_questoes):
-                st.success("🎉 Fim do caderno!")
-                if st.button("🔄 Reiniciar Bateria", type="primary"):
+                st.success("🎉 Você finalizou este caderno de questões!")
+                if st.button("🔄 Refazer Caderno", type="primary"):
                     st.session_state.idx_questao = 0
                     st.session_state.estado_resposta = "aguardando"
                     st.rerun()
@@ -262,74 +259,100 @@ else:
                     ).filter(Questao.id == id_atual).first()
 
                     if questao:
+                        # Cabeçalho da Questão
                         orgao_nome = questao.orgao.nome if questao.orgao else 'Geral'
                         cargo_nome = questao.cargo.nome if questao.cargo else 'Geral'
-                        
-                        # 🏷️ Q-ID Adicionado ao Header para o Aluno também!
                         prefixo = questao.assunto.disciplina.nome[:3].upper() if questao.assunto else "GER"
                         qid_baply = f"BAP-{prefixo}{questao.id:04d}"
                         
                         st.markdown(f"""
                             <div style='background-color: #FAFAFA; padding: 12px; border-radius: 8px; border-left: 5px solid #3E2723; border-right: 1px solid #EAE0D5; border-top: 1px solid #EAE0D5; border-bottom: 1px solid #EAE0D5;'>
-                                <div style='color: #7F8C8D; font-size: 0.8rem; font-weight: bold; text-transform: uppercase;'>
-                                    {questao.banca.sigla} • {questao.ano} • {orgao_nome} • {cargo_nome}
+                                <div style='display: flex; justify-content: space-between;'>
+                                    <span style='color: #7F8C8D; font-size: 0.8rem; font-weight: bold; text-transform: uppercase;'>
+                                        {questao.banca.sigla} • {questao.ano} • {orgao_nome} • {cargo_nome}
+                                    </span>
+                                    <span style='color: #D4AF37; font-size: 0.8rem; font-weight: bold;'>🏷️ {qid_baply}</span>
                                 </div>
-                                <div style='color: #3E2723; font-size: 0.9rem; margin-top: 5px;'>
-                                    <b>Assunto:</b> {questao.assunto.disciplina.nome} > {questao.assunto.nome}
+                                <div style='color: #3E2723; font-size: 0.95rem; margin-top: 5px;'>
+                                    <b>{questao.assunto.disciplina.nome}</b> > {questao.assunto.nome}
                                 </div>
-                                <div style='text-align: right; color: #D4AF37; font-size: 0.75rem; font-weight: bold;'>🏷️ {qid_baply} | Q. {st.session_state.idx_questao + 1} de {len(ids_questoes)}</div>
+                                <div style='text-align: right; color: #7F8C8D; font-size: 0.75rem; margin-top: 5px;'>Questão {st.session_state.idx_questao + 1} de {len(ids_questoes)}</div>
                             </div>
                         """, unsafe_allow_html=True)
 
                         st.markdown("<br>", unsafe_allow_html=True)
-                        st.markdown(f"<div style='font-size: 1.15rem;'>{questao.enunciado_html}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size: 1.15rem; color: #2C3E50;'>{questao.enunciado_html}</div>", unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
 
-                        mapa_alt = {}
-                        opcoes_letras = []
-                        st.markdown("**Alternativas:**")
+                        # 🚀 NOVO LAYOUT DE ALTERNATIVAS (1-Click)
                         for alt in sorted(questao.alternativas, key=lambda x: x.letra):
-                            st.markdown(f"<div style='margin-bottom: 8px; padding: 12px; border-radius: 8px; background-color: #FFFFFF; border: 1px solid #F2F3F4;'><b>{alt.letra})</b> {alt.texto_html}</div>", unsafe_allow_html=True)
-                            opcoes_letras.append(alt.letra)
-                            mapa_alt[alt.letra] = alt
+                            col_btn, col_txt = st.columns([1, 11])
+                            
+                            with col_btn:
+                                if st.session_state.estado_resposta == "aguardando":
+                                    # Modo Interativo: Botões clicáveis
+                                    if st.button(alt.letra, key=f"btn_{questao.id}_{alt.id}", use_container_width=True):
+                                        # GRAVAÇÃO INSTANTÂNEA NO BANCO
+                                        novo_h = HistoricoResolucao(
+                                            user_id=uuid.UUID(st.session_state.utilizador.id),
+                                            questao_id=questao.id,
+                                            alternativa_selecionada_id=alt.id,
+                                            acertou=alt.is_correta
+                                        )
+                                        session.add(novo_h)
+                                        session.commit()
+                                        
+                                        # ATUALIZA A SESSÃO E RODA
+                                        st.session_state.estado_resposta = "respondido"
+                                        st.session_state.acertou_ultima = alt.is_correta
+                                        st.session_state.alt_escolhida_id = alt.id
+                                        st.session_state.letra_correta = next(a.letra for a in questao.alternativas if a.is_correta)
+                                        st.session_state.comentario_prof = questao.comentario_html
+                                        st.rerun()
+                                else:
+                                    # Modo Respondido: Feedback Visual Estático (Sem botão)
+                                    if alt.is_correta:
+                                        st.markdown(f"<div style='background-color: #27AE60; color: white; text-align: center; padding: 7px; border-radius: 5px; font-weight: bold; margin-top: 5px;'>{alt.letra}</div>", unsafe_allow_html=True)
+                                    elif alt.id == st.session_state.get("alt_escolhida_id") and not alt.is_correta:
+                                        st.markdown(f"<div style='background-color: #E74C3C; color: white; text-align: center; padding: 7px; border-radius: 5px; font-weight: bold; margin-top: 5px;'>{alt.letra}</div>", unsafe_allow_html=True)
+                                    else:
+                                        st.markdown(f"<div style='background-color: #ECF0F1; color: #95A5A6; text-align: center; padding: 7px; border-radius: 5px; font-weight: bold; margin-top: 5px;'>{alt.letra}</div>", unsafe_allow_html=True)
 
-                        st.markdown("---")
-
-                        if st.session_state.estado_resposta == "aguardando":
-                            resp_sel = st.radio("Selecione sua resposta:", options=opcoes_letras, horizontal=True, key=f"q_{id_atual}")
-                            if st.button("Responder ✅", type="primary", use_container_width=True):
-                                alt_escolhida = mapa_alt[resp_sel]
-                                novo_h = HistoricoResolucao(
-                                    user_id=uuid.UUID(st.session_state.utilizador.id),
-                                    questao_id=questao.id,
-                                    alternativa_selecionada_id=alt_escolhida.id,
-                                    acertou=alt_escolhida.is_correta
-                                )
-                                session.add(novo_h)
-                                session.commit()
-                                st.session_state.estado_resposta = "respondido"
-                                st.session_state.acertou_ultima = alt_escolhida.is_correta
-                                st.session_state.letra_correta = next(a.letra for a in questao.alternativas if a.is_correta)
-                                st.session_state.comentario_prof = questao.comentario_html
-                                st.rerun()
-
-                        elif st.session_state.estado_resposta == "respondido":
-                            if st.session_state.acertou_ultima:
-                                st.success(f"🎯 ACERTOU! Gabarito: **{st.session_state.letra_correta}**")
-                            else:
-                                st.error(f"❌ ERROU. O gabarito é **{st.session_state.letra_correta}**")
-
-                            if st.session_state.comentario_prof:
-                                with st.expander("👨‍🏫 Ver Comentário do Professor", expanded=True):
-                                    st.markdown(st.session_state.comentario_prof, unsafe_allow_html=True)
-
-                            if st.button("Próxima Questão ➡️", type="primary", use_container_width=True):
-                                st.session_state.idx_questao += 1
-                                st.session_state.estado_resposta = "aguardando"
-                                st.rerun()
+                            with col_txt:
+                                # Feedback de Cor no Texto da Alternativa
+                                bg_color, border_color = "#FFFFFF", "#F2F3F4"
                                 
+                                if st.session_state.estado_resposta == "respondido":
+                                    if alt.is_correta:
+                                        bg_color, border_color = "#E9F7EF", "#27AE60" # Verde
+                                    elif alt.id == st.session_state.get("alt_escolhida_id"):
+                                        bg_color, border_color = "#FDEDEC", "#E74C3C" # Vermelho
+                                        
+                                st.markdown(f"<div style='padding: 10px; border-radius: 8px; background-color: {bg_color}; border: 1px solid {border_color}; margin-bottom: 10px; min-height: 45px; display: flex; align-items: center;'>{alt.texto_html}</div>", unsafe_allow_html=True)
+
+                        # --- BARRA DE AÇÕES PÓS-RESPOSTA ---
+                        if st.session_state.estado_resposta == "respondido":
+                            st.markdown("---")
+                            col_result, col_next = st.columns([2, 1])
+                            
+                            with col_result:
+                                if st.session_state.acertou_ultima:
+                                    st.markdown(f"<h4 style='color: #27AE60; margin-bottom: 0px;'>✅ Resposta Correta!</h4>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f"<h4 style='color: #E74C3C; margin-bottom: 0px;'>❌ Resposta Incorreta.</h4>", unsafe_allow_html=True)
+                            
+                            with col_next:
+                                if st.button("Próxima Questão ➡️", type="primary", use_container_width=True):
+                                    st.session_state.idx_questao += 1
+                                    st.session_state.estado_resposta = "aguardando"
+                                    st.rerun()
+
+                            # Comentário Expandido Automático
+                            if st.session_state.get("comentario_prof") and st.session_state.comentario_prof != "<p><br></p>":
+                                with st.expander("👨‍🏫 Comentário do Professor", expanded=True):
+                                    st.markdown(st.session_state.comentario_prof, unsafe_allow_html=True)
+                                    
         except Exception as e:
-            # Proteção aprimorada para mostrar o erro real ao desenvolvedor se algo der errado
             st.error(f"⚠️ Erro ao carregar a interface de questões. Detalhe técnico: {e}")
 
     elif selecao == "Meu Desempenho":
