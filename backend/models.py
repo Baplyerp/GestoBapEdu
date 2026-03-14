@@ -14,6 +14,21 @@ class AuditMixin:
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     is_active: Mapped[bool] = mapped_column(default=True, index=True)
 
+# --- ENUMS PARA FILTROS INTELIGENTES ---
+class EscolaridadeEnum(enum.Enum):
+    MEDIO = "Médio"
+    SUPERIOR = "Superior"
+
+class CarreiraEnum(enum.Enum):
+    CONTROLE = "Controle e Gestão"
+    FISCAL = "Fiscal"
+    ADMINISTRATIVA = "Administrativa"
+    TRIBUNAIS = "Tribunais"
+    POLICIAL = "Policial"
+    EDUCACAO = "Educação"
+    SAUDE = "Saúde"
+    OUTROS = "Outros"
+
 # --- CATÁLOGO ---
 class Disciplina(Base, AuditMixin):
     __tablename__ = 'tb_disciplina'
@@ -34,7 +49,17 @@ class Banca(Base, AuditMixin):
     sigla: Mapped[str] = mapped_column(String(20), unique=True)
     nome: Mapped[str] = mapped_column(String(100))
 
-# --- AVALIAÇÃO (O Coração com Suporte a Vídeo/HTML) ---
+class Orgao(Base, AuditMixin):
+    __tablename__ = 'tb_orgao'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(150), unique=True, index=True)
+
+class Cargo(Base, AuditMixin):
+    __tablename__ = 'tb_cargo'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nome: Mapped[str] = mapped_column(String(150), index=True)
+
+# --- AVALIAÇÃO ---
 class DificuldadeEnum(enum.Enum):
     FACIL = "FACIL"
     MEDIA = "MEDIA"
@@ -46,7 +71,11 @@ class Questao(Base, AuditMixin):
     
     enunciado_html: Mapped[str] = mapped_column(Text) 
     ano: Mapped[int] = mapped_column(index=True)
-    dificuldade: Mapped[DificuldadeEnum] = mapped_column(default=DificuldadeEnum.MEDIA)
+    dificuldade: Mapped[DificuldadeEnum] = mapped_column(Enum(DificuldadeEnum), default=DificuldadeEnum.MEDIA)
+    
+    # Novos campos de metadados
+    escolaridade: Mapped[EscolaridadeEnum] = mapped_column(Enum(EscolaridadeEnum), nullable=True, index=True)
+    carreira: Mapped[CarreiraEnum] = mapped_column(Enum(CarreiraEnum), nullable=True, index=True)
     
     comentario_html: Mapped[str] = mapped_column(Text, nullable=True)
     video_explicacao_url: Mapped[str] = mapped_column(String(255), nullable=True)
@@ -54,10 +83,14 @@ class Questao(Base, AuditMixin):
     # Chaves Estrangeiras (IDs)
     assunto_id: Mapped[int] = mapped_column(ForeignKey('tb_assunto.id'), index=True)
     banca_id: Mapped[int] = mapped_column(ForeignKey('tb_banca.id'), index=True)
+    orgao_id: Mapped[int] = mapped_column(ForeignKey('tb_orgao.id'), index=True, nullable=True)
+    cargo_id: Mapped[int] = mapped_column(ForeignKey('tb_cargo.id'), index=True, nullable=True)
     
-    # RELACIONAMENTOS (O que estava faltando!)
+    # RELACIONAMENTOS
     banca: Mapped["Banca"] = relationship()
     assunto: Mapped["Assunto"] = relationship()
+    orgao: Mapped["Orgao"] = relationship()
+    cargo: Mapped["Cargo"] = relationship()
     alternativas: Mapped[list["Alternativa"]] = relationship(back_populates="questao", cascade="all, delete-orphan")
 
 class Alternativa(Base):
@@ -65,7 +98,6 @@ class Alternativa(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     questao_id: Mapped[int] = mapped_column(ForeignKey('tb_questao.id'))
     
-    # Também suporta HTML caso a alternativa tenha imagens ou fórmulas
     texto_html: Mapped[str] = mapped_column(Text) 
     is_correta: Mapped[bool] = mapped_column(default=False)
     letra: Mapped[str] = mapped_column(String(1)) 
