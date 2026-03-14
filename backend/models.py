@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 import uuid
 import enum
+from typing import Optional # <-- IMPORTANTE: Adicionado para campos nulos
 from sqlalchemy import String, Text, Integer, Boolean, ForeignKey, DateTime, Enum
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -73,24 +74,24 @@ class Questao(Base, AuditMixin):
     ano: Mapped[int] = mapped_column(index=True)
     dificuldade: Mapped[DificuldadeEnum] = mapped_column(Enum(DificuldadeEnum), default=DificuldadeEnum.MEDIA)
     
-    # Novos campos de metadados
-    escolaridade: Mapped[EscolaridadeEnum] = mapped_column(Enum(EscolaridadeEnum), nullable=True, index=True)
-    carreira: Mapped[CarreiraEnum] = mapped_column(Enum(CarreiraEnum), nullable=True, index=True)
+    # Novos campos de metadados (Usando Optional)
+    escolaridade: Mapped[Optional[EscolaridadeEnum]] = mapped_column(Enum(EscolaridadeEnum), nullable=True, index=True)
+    carreira: Mapped[Optional[CarreiraEnum]] = mapped_column(Enum(CarreiraEnum), nullable=True, index=True)
     
-    comentario_html: Mapped[str] = mapped_column(Text, nullable=True)
-    video_explicacao_url: Mapped[str] = mapped_column(String(255), nullable=True)
+    comentario_html: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    video_explicacao_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
-    # Chaves Estrangeiras (IDs)
+    # Chaves Estrangeiras (IDs Opcionais usam Optional)
     assunto_id: Mapped[int] = mapped_column(ForeignKey('tb_assunto.id'), index=True)
     banca_id: Mapped[int] = mapped_column(ForeignKey('tb_banca.id'), index=True)
-    orgao_id: Mapped[int] = mapped_column(ForeignKey('tb_orgao.id'), index=True, nullable=True)
-    cargo_id: Mapped[int] = mapped_column(ForeignKey('tb_cargo.id'), index=True, nullable=True)
+    orgao_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_orgao.id'), index=True, nullable=True)
+    cargo_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_cargo.id'), index=True, nullable=True)
     
-    # RELACIONAMENTOS
+    # RELACIONAMENTOS (Se a ForeignKey é opcional, o relacionamento também é)
     banca: Mapped["Banca"] = relationship()
     assunto: Mapped["Assunto"] = relationship()
-    orgao: Mapped["Orgao"] = relationship()
-    cargo: Mapped["Cargo"] = relationship()
+    orgao: Mapped[Optional["Orgao"]] = relationship()
+    cargo: Mapped[Optional["Cargo"]] = relationship()
     alternativas: Mapped[list["Alternativa"]] = relationship(back_populates="questao", cascade="all, delete-orphan")
 
 class Alternativa(Base):
@@ -110,7 +111,10 @@ class HistoricoResolucao(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     questao_id: Mapped[int] = mapped_column(ForeignKey('tb_questao.id'), index=True)
-    alternativa_selecionada_id: Mapped[int] = mapped_column(ForeignKey('tb_alternativa.id'), nullable=True)
+    
+    # Usando Optional
+    alternativa_selecionada_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_alternativa.id'), nullable=True)
     acertou: Mapped[bool] = mapped_column(index=True)
-    tempo_gasto_segundos: Mapped[int] = mapped_column(nullable=True)
+    tempo_gasto_segundos: Mapped[Optional[int]] = mapped_column(nullable=True)
+    
     resolvido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
