@@ -181,8 +181,113 @@ else:
             """, unsafe_allow_html=True)
 
     elif selecao == "Resolver Questões":
-        st.title("🎯 Resolver Questões")
-        st.info("O motor de questões será conectado aqui!")
+        st.markdown("## 🎯 Resolver Questões")
+        st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Sua bateria de estudos ativa.</p>", unsafe_allow_html=True)
+
+        from database import get_engine
+        from sqlalchemy.orm import Session
+        from backend.models import Questao, HistoricoResolucao
+        import uuid
+
+        # --- 1. CONTROLADOR DE MEMÓRIA DO QUIZ ---
+        if 'idx_questao' not in st.session_state:
+            st.session_state.idx_questao = 0 # Qual questão estamos vendo agora
+        if 'estado_resposta' not in st.session_state:
+            st.session_state.estado_resposta = "aguardando" # "aguardando" ou "respondido"
+        if 'lista_questoes' not in st.session_state:
+            with Session(get_engine()) as session:
+                # Puxa todos os IDs das questões do banco
+                todas_questoes = session.query(Questao).all()
+                st.session_state.lista_questoes = [q.id for q in todas_questoes]
+
+        ids_questoes = st.session_state.lista_questoes
+
+        # --- 2. RENDERIZAÇÃO DA TELA ---
+        if not ids_questoes:
+            st.info("📭 Nenhuma questão encontrada no banco de dados. Vá até a 'Área do Professor' e cadastre a sua primeira questão!")
+        elif st.session_state.idx_questao >= len(ids_questoes):
+            st.success("🎉 Sensacional! Você finalizou todas as questões disponíveis na plataforma.")
+            if st.button("🔄 Reiniciar Bateria de Questões", type="primary"):
+                st.session_state.idx_questao = 0
+                st.session_state.estado_resposta = "aguardando"
+                st.rerun()
+        else:
+            id_atual = ids_questoes[st.session_state.idx_questao]
+
+            with Session(get_engine()) as session:
+                questao = session.query(Questao).get(id_atual)
+                alternativas = questao.alternativas
+                
+                # Cabeçalho da Questão (Metadados)
+                st.markdown(f"""
+                    <div style='background-color: #FAFAFA; padding: 10px 15px; border-radius: 8px; border: 1px solid #EAE0D5; display: flex; justify-content: space-between;'>
+                        <span style='color: #7F8C8D; font-size: 0.85rem;'><b>Banca:</b> {questao.banca.sigla} | <b>Ano:</b> {questao.ano} | <b>Assunto:</b> {questao.assunto.disciplina.nome} - {questao.assunto.nome}</span>
+                        <span style='color: #D4AF37; font-weight: bold;'>Questão {st.session_state.idx_questao + 1} de {len(ids_questoes)}</span>
+                    </div>
+                """, unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Enunciado Rico (Renderiza o HTML do Quill perfeitamente)
+                st.markdown(f"<div style='font-size: 1.1rem; color: #2C3E50;'>{questao.enunciado_html}</div>", unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                # Mapeando alternativas
+                opcoes_letras = []
+                mapa_alt = {}
+                
+                st.markdown("**Alternativas:**")
+                for alt in alternativas:
+                    # Renderiza o visual da alternativa (HTML)
+                    st.markdown(f"<div style='margin-bottom: 10px; padding: 10px; border-radius: 5px; background-color: #FFFFFF; border: 1px solid #F2F3F4;'><b>{alt.letra})</b> {alt.texto_html}</div>", unsafe_allow_html=True)
+                    opcoes_letras.append(alt.letra)
+                    mapa_alt[alt.letra] = alt
+
+                st.markdown("---")
+
+                # --- 3. LÓGICA DE RESPOSTA E FEEDBACK ---
+                if st.session_state.estado_resposta == "aguardando":
+                    # O usuário escolhe a letra aqui
+                    resposta_selecionada = st.radio("Selecione a sua resposta:", options=opcoes_letras, horizontal=True)
+
+                    if st.button("Confirmar Resposta ✅", type="primary", use_container_width=True):
+                        alt_escolhida = mapa_alt[resposta_selecionada]
+
+                        # 🧠 GRAVANDO NO HISTÓRICO DO SUPABASE
+                        novo_historico = HistoricoResolucao(
+                            user_id=uuid.UUID(st.session_state.utilizador.id),
+                            questao_id=questao.id,
+                            alternativa_selecionada_id=alt_escolhida.id,
+                            acertou=alt_escolhida.is_correta
+                        )
+                        session.add(novo_historico)
+                        session.commit()
+
+                        # Atualizando a memória do app para mostrar o gabarito
+                        st.session_state.estado_resposta = "respondido"
+                        st.session_state.acertou_ultima = alt_escolhida.is_correta
+                        st.session_state.letra_correta = next(a.letra for a in alternativas if a.is_correta)
+                        st.session_state.comentario_prof = questao.comentario_html
+                        st.rerun()
+
+                elif st.session_state.estado_resposta == "respondido":
+                    # Feedback visual de Acerto ou Erro
+                    if st.session_state.acertou_ultima:
+                        st.success(f"🎯 Resposta Correta! A alternativa certa é a letra **{st.session_state.letra_correta}**.")
+                    else:
+                        st.error(f"❌ Resposta Incorreta. A alternativa certa era a letra **{st.session_state.letra_correta}**.")
+
+                    # Mostra o comentário do professor se existir
+                    if st.session_state.comentario_prof and st.session_state.comentario_prof != "<p><br></p>":
+                        st.markdown("#### 👨‍🏫 Comentário do Professor")
+                        st.markdown(f"<div style='background-color: #FAFAFA; padding: 15px; border-radius: 8px; border-left: 5px solid #D4AF37;'>{st.session_state.comentario_prof}</div>", unsafe_allow_html=True)
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # Botão para avançar
+                    if st.button("Próxima Questão ➡️", type="primary", use_container_width=True):
+                        st.session_state.idx_questao += 1
+                        st.session_state.estado_resposta = "aguardando"
+                        st.rerun()
 
     elif selecao == "Meu Desempenho":
         st.title("📊 Meu Desempenho")
