@@ -1,4 +1,3 @@
-
 import streamlit as st
 import os
 import pandas as pd
@@ -344,9 +343,10 @@ else:
         try:
             from backend.models import Banca, Disciplina, Assunto, Questao, Alternativa, DificuldadeEnum, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum
 
-            tab_banca, tab_disc, tab_orgao, tab_questao = st.tabs(["🏛️ 1. Bancas", "📚 2. Disciplinas & Assuntos", "🏢 3. Órgãos/Cargos", "✍️ 4. Nova Questão"])
+            # 🚀 ADICIONADA UMA NOVA ABA: "GERENCIAR QUESTÕES"
+            tab_banca, tab_disc, tab_orgao, tab_questao, tab_gerenciar = st.tabs(["🏛️ 1. Bancas", "📚 2. Disciplinas & Assuntos", "🏢 3. Órgãos/Cargos", "✍️ 4. Nova Questão", "⚙️ 5. Gerenciar"])
 
-            # ABA 1: BANCAS
+            # ABA 1: BANCAS (Intacta)
             with tab_banca:
                 st.markdown("#### Cadastrar Nova Banca")
                 with st.form("form_banca"):
@@ -363,7 +363,7 @@ else:
                         except Exception as e:
                             st.error(f"Erro ao salvar: Já existe? Detalhes: {e}")
 
-            # ABA 2: DISCIPLINAS E ASSUNTOS
+            # ABA 2: DISCIPLINAS E ASSUNTOS (Intacta)
             with tab_disc:
                 col_d, col_a = st.columns(2)
                 with col_d:
@@ -397,7 +397,7 @@ else:
                                 session.commit()
                                 st.success(f"✅ Assunto {nome_assunto} salvo!")
 
-            # ABA 3: ÓRGÃOS E CARGOS
+            # ABA 3: ÓRGÃOS E CARGOS (Intacta)
             with tab_orgao:
                 st.markdown("#### Gestão de Órgãos e Cargos")
                 col_o, col_c = st.columns(2)
@@ -414,7 +414,7 @@ else:
                             with Session(get_engine()) as s: 
                                 s.add(Cargo(nome=n_cargo)); s.commit(); st.success("✅ Cargo Salvo!")
 
-            # ABA 4: NOVA QUESTÃO (Avançada)
+            # ABA 4: NOVA QUESTÃO (Intacta)
             with tab_questao:
                 st.markdown("#### ✍️ Cadastrar Questão Completa")
                 
@@ -533,8 +533,84 @@ else:
                                     except Exception as e:
                                         session.rollback()
                                         st.error(f"Erro Crítico: {e}")
+                                        
+            # 🚀 ABA 5: GERENCIAR (CORRIGIDA E SUPER RÁPIDA)
+            with tab_gerenciar:
+                st.markdown("#### ⚙️ Gerenciar e Corrigir Questões")
+                st.info("Busque por questões cadastradas para visualizar seu Código Único ou solicitar edição.")
+                
+                with Session(get_engine()) as session:
+                    bancas_prof = session.query(Banca).all()
+                    assuntos_prof = session.query(Assunto).all()
+                    
+                # 🛡️ O FORMULÁRIO DE FILTRO: Evita que a tela recarregue a cada clique!
+                with st.form("form_busca_prof"):
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        filtro_banca = st.multiselect("Filtrar por Banca", options=[b.sigla for b in bancas_prof])
+                    with c2:
+                        filtro_assunto = st.multiselect("Filtrar por Assunto", options=[a.nome for a in assuntos_prof])
+                    
+                    btn_buscar = st.form_submit_button("🔍 Buscar Questões", type="primary", use_container_width=True)
+                
+                # Só processa se o botão foi clicado
+                if btn_buscar:
+                    st.session_state.mgr_buscar = True
+                    st.session_state.mgr_f_banca = filtro_banca
+                    st.session_state.mgr_f_assunto = filtro_assunto
+                    
+                if st.session_state.get("mgr_buscar", False):
+                    try:
+                        with Session(get_engine()) as session:
+                            from sqlalchemy.orm import joinedload
+                            
+                            query_prof = session.query(Questao).options(
+                                joinedload(Questao.banca),
+                                joinedload(Questao.assunto).joinedload(Assunto.disciplina)
+                            )
+                            
+                            # Filtros robustos com JOIN
+                            if st.session_state.mgr_f_banca:
+                                query_prof = query_prof.join(Banca, Questao.banca_id == Banca.id).filter(Banca.sigla.in_(st.session_state.mgr_f_banca))
+                            if st.session_state.mgr_f_assunto:
+                                query_prof = query_prof.join(Assunto, Questao.assunto_id == Assunto.id).filter(Assunto.nome.in_(st.session_state.mgr_f_assunto))
+                                
+                            resultados = query_prof.all()
+                            
+                            if not resultados:
+                                st.warning("Nenhuma questão encontrada com esses filtros. Tente deixar os filtros vazios e clicar em Buscar para ver todas as questões.")
+                            else:
+                                st.success(f"Encontradas {len(resultados)} questões cadastradas.")
+                                
+                                for q in resultados:
+                                    # 🛡️ PROTEÇÃO PARA QUESTÕES ANTIGAS (Legacy Code)
+                                    if q.assunto and q.assunto.disciplina:
+                                        prefixo_disc = q.assunto.disciplina.nome[:3].upper()
+                                    else:
+                                        prefixo_disc = "GER" # Geral/Órfã
+                                        
+                                    codigo_unico = f"BAP-{prefixo_disc}{q.id:04d}" 
+                                    
+                                    nome_banca = q.banca.sigla if q.banca else "Banca ND"
+                                    nome_assunto = q.assunto.nome if q.assunto else "Assunto ND"
+                                    
+                                    with st.expander(f"🏷️ {codigo_unico} | {nome_banca} - {q.ano}"):
+                                        st.markdown(f"**Assunto:** {nome_assunto}")
+                                        st.markdown(f"<div style='background: #FAFAFA; padding: 10px; border-radius: 5px; font-size: 0.9rem; max-height: 100px; overflow-y: auto;'>{q.enunciado_html}</div>", unsafe_allow_html=True)
+                                        
+                                        col_edit, col_del = st.columns(2)
+                                        with col_edit:
+                                            if st.button(f"✏️ Editar", key=f"edit_{q.id}", use_container_width=True):
+                                                st.toast(f"Preparando edição para o {codigo_unico}... (Fase 4)")
+                                        with col_del:
+                                            if st.button(f"🗑️ Inativar", key=f"del_{q.id}", use_container_width=True):
+                                                st.toast("Rotina de arquivamento será ativada na Fase 4.")
+                    except Exception as err:
+                        st.error(f"Erro interno ao buscar: {err}")
+
+        # 👇 ATENÇÃO: SUBSTITUA O AVISO GENÉRICO POR ESTE (Mostra o erro real)
         except Exception as e:
-            st.warning("⚠️ Atualização necessária! Vá à aba 'Meu Perfil' e clique em 'Construir Tabelas no Supabase'.")
+            st.error(f"⚠️ Erro crítico na Área do Professor. Detalhe técnico para o desenvolvedor: {e}")
 
     # -----------------------------------------
     # ABA RECUPERADA: MEU PERFIL (INTACTA)
