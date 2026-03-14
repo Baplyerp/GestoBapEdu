@@ -534,54 +534,66 @@ else:
                                         session.rollback()
                                         st.error(f"Erro Crítico: {e}")
                                         
-            # 🚀 ABA 5: GERENCIAR (O NOVO CÓDIGO)
+            # 🚀 ABA 5: GERENCIAR (OTIMIZADA E COM MEMÓRIA)
             with tab_gerenciar:
                 st.markdown("#### ⚙️ Gerenciar e Corrigir Questões")
                 st.info("Busque por questões cadastradas para visualizar seu Código Único ou solicitar edição.")
                 
                 with Session(get_engine()) as session:
-                    # Carrega as opções para o filtro simples do professor
                     bancas_prof = session.query(Banca).all()
                     assuntos_prof = session.query(Assunto).all()
                     
-                    c1, c2 = st.columns(2)
-                    filtro_banca = c1.multiselect("Filtrar por Banca", options=[b.sigla for b in bancas_prof])
-                    filtro_assunto = c2.multiselect("Filtrar por Assunto", options=[a.nome for a in assuntos_prof])
+                c1, c2 = st.columns(2)
+                filtro_banca = c1.multiselect("Filtrar por Banca", options=[b.sigla for b in bancas_prof])
+                filtro_assunto = c2.multiselect("Filtrar por Assunto", options=[a.nome for a in assuntos_prof])
+                
+                # 🧠 O SEGREDO: Salvar a intenção de busca na memória
+                if st.button("🔍 Buscar Questões", type="primary"):
+                    st.session_state.mgr_buscar = True
+                    st.session_state.mgr_f_banca = filtro_banca
+                    st.session_state.mgr_f_assunto = filtro_assunto
                     
-                    if st.button("🔍 Buscar Questões", type="primary"):
-                        query_prof = session.query(Questao).join(Banca).join(Assunto)
+                # Só executa e mostra os resultados se o botão já foi apertado alguma vez
+                if st.session_state.get("mgr_buscar", False):
+                    with Session(get_engine()) as session:
+                        from sqlalchemy.orm import joinedload
                         
-                        if filtro_banca:
-                            query_prof = query_prof.filter(Banca.sigla.in_(filtro_banca))
-                        if filtro_assunto:
-                            query_prof = query_prof.filter(Assunto.nome.in_(filtro_assunto))
+                        # ⚡ PERFORMANCE: joinedload evita a lentidão do N+1
+                        query_prof = session.query(Questao).options(
+                            joinedload(Questao.banca),
+                            joinedload(Questao.assunto).joinedload(Assunto.disciplina)
+                        )
+                        
+                        # Filtros inteligentes usando relacionamentos do SQLAlchemy (.has)
+                        if st.session_state.mgr_f_banca:
+                            query_prof = query_prof.filter(Questao.banca.has(Banca.sigla.in_(st.session_state.mgr_f_banca)))
+                        if st.session_state.mgr_f_assunto:
+                            query_prof = query_prof.filter(Questao.assunto.has(Assunto.nome.in_(st.session_state.mgr_f_assunto)))
                             
                         resultados = query_prof.all()
                         
                         if not resultados:
                             st.warning("Nenhuma questão encontrada com esses filtros.")
                         else:
-                            st.success(f"{len(resultados)} questões encontradas!")
+                            st.success(f"Encontradas {len(resultados)} questões cadastradas.")
                             
-                            # Renderiza a lista de questões com o Código Único Baply
+                            # Renderiza a lista de questões sem recarregar tudo do zero
                             for q in resultados:
-                                # Lógica do Código Único: Três primeiras letras da disciplina + ID
+                                # Lógica Q-ID Baply
                                 prefixo_disc = q.assunto.disciplina.nome[:3].upper()
-                                codigo_unico = f"BAP-{prefixo_disc}{q.id:04d}" # Ex: BAP-AUD0001
+                                codigo_unico = f"BAP-{prefixo_disc}{q.id:04d}" 
                                 
                                 with st.expander(f"🏷️ {codigo_unico} | {q.banca.sigla} - {q.ano}"):
                                     st.markdown(f"**Assunto:** {q.assunto.nome}")
-                                    st.markdown("**Enunciado:**")
-                                    # Limitamos o tamanho do enunciado na visualização rápida
                                     st.markdown(f"<div style='background: #FAFAFA; padding: 10px; border-radius: 5px; font-size: 0.9rem; max-height: 100px; overflow-y: auto;'>{q.enunciado_html}</div>", unsafe_allow_html=True)
                                     
                                     col_edit, col_del = st.columns(2)
                                     with col_edit:
-                                        if st.button(f"✏️ Editar (Em Breve)", key=f"edit_{q.id}", use_container_width=True):
-                                            st.toast(f"Módulo de edição para {codigo_unico} será ativado na Fase 4!")
+                                        if st.button(f"✏️ Editar", key=f"edit_{q.id}", use_container_width=True):
+                                            st.toast(f"Preparando edição para o {codigo_unico}... (Fase 4)")
                                     with col_del:
                                         if st.button(f"🗑️ Inativar", key=f"del_{q.id}", use_container_width=True):
-                                            st.toast("Soft delete será implementado.")
+                                            st.toast("Rotina de arquivamento será ativada na Fase 4.")
                                             
         except Exception as e:
             st.warning("⚠️ Atualização necessária! Vá à aba 'Meu Perfil' e clique em 'Construir Tabelas no Supabase'.")
