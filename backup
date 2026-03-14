@@ -1,3 +1,4 @@
+
 import streamlit as st
 import os
 import pandas as pd
@@ -13,7 +14,8 @@ import uuid
 from database import get_engine
 from sqlalchemy.orm import Session, joinedload
 try:
-    from backend.models import Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum
+    # 👇 A CORREÇÃO AQUI: Adicionamos Simulado, SimuladoQuestao e RegraPenalidadeEnum no final da linha!
+    from backend.models import Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum, Simulado, SimuladoQuestao, RegraPenalidadeEnum
     BANCO_PRONTO = True
 except Exception as e:
     BANCO_PRONTO = False
@@ -408,10 +410,13 @@ else:
             st.stop()
             
         try:
-            tab_banca, tab_disc, tab_orgao, tab_questao, tab_gerenciar = st.tabs(["🏛️ 1. Bancas", "📚 2. Disciplinas & Assuntos", "🏢 3. Órgãos/Cargos", "✍️ 4. Nova Questão", "⚙️ 5. Gerenciar"])
+            # 👇 AQUI É A CORREÇÃO: Pressione a tecla TAB uma vez antes do "tab_banca" para ele ficar "dentro" do try
+            tab_banca, tab_disc, tab_orgao, tab_questao, tab_gerenciar, tab_simulados = st.tabs(["🏛️ 1. Bancas", "📚 2. Disciplinas & Assuntos", "🏢 3. Órgãos/Cargos", "✍️ 4. Nova Questão", "⚙️ 5. Gerenciar", "📝 6. Simulados"])
 
+            # ABA 1: BANCAS
             with tab_banca:
                 st.markdown("#### Cadastrar Nova Banca")
+                # ... o resto do seu código continua aqui normalmente ...
                 with st.form("form_banca"):
                     sigla_banca = st.text_input("Sigla", placeholder="Ex: FCC, CEBRASPE, IBFC")
                     nome_banca = st.text_input("Nome Completo", placeholder="Ex: Fundação Carlos Chagas")
@@ -677,6 +682,127 @@ else:
                                                 st.toast("Rotina de arquivamento será ativada na Fase 4.")
                     except Exception as err:
                         st.error(f"Erro interno ao buscar: {err}")
+
+    # 🚀 ABA 6: CONSTRUTOR DE SIMULADOS DE EDITAL
+            with tab_simulados:
+                st.markdown("#### 📝 Construtor de Simulados (Regras de Edital)")
+                
+                # Sub-menu interno usando o option_menu
+                menu_sim = option_menu(None, ["1. Criar Simulado", "2. Adicionar Questões"], icons=["plus-circle", "list-check"], orientation="horizontal", styles={"nav-link": {"font-size": "14px"}})
+                
+                # --- PASSO A: CRIAR A "CASCA" DO SIMULADO ---
+                if menu_sim == "1. Criar Simulado":
+                    with st.form("form_novo_simulado"):
+                        st.info("Defina as regras de penalidade fiéis ao edital do seu concurso.")
+                        nome_sim = st.text_input("Nome do Simulado", placeholder="Ex: Simulado Reta Final - TCE/PE")
+                        
+                        # Usa o Enum para garantir a tipagem correta no banco
+                        regra_sim = st.selectbox("Regra de Pontuação/Penalidade da Banca", [e.value for e in RegraPenalidadeEnum])
+                        
+                        if st.form_submit_button("💾 Criar Estrutura do Simulado", type="primary", use_container_width=True):
+                            if not nome_sim:
+                                st.error("❌ O simulado precisa de um nome.")
+                            else:
+                                with Session(get_engine()) as session:
+                                    try:
+                                        novo_sim = Simulado(
+                                            nome=nome_sim,
+                                            regra_penalidade=next(e for e in RegraPenalidadeEnum if e.value == regra_sim)
+                                        )
+                                        session.add(novo_sim)
+                                        session.commit()
+                                        st.success(f"✅ Simulado '{nome_sim}' criado com sucesso! Agora vá para a aba 'Adicionar Questões'.")
+                                        st.balloons()
+                                    except Exception as e:
+                                        session.rollback()
+                                        st.error(f"Erro ao criar (Verifique se o nome já existe): {e}")
+
+                # --- PASSO B: INJETAR AS QUESTÕES LÁ DENTRO ---
+                elif menu_sim == "2. Adicionar Questões":
+                    with Session(get_engine()) as session:
+                        # Carrega os simulados que acabamos de criar
+                        simulados_disp = {s.nome: s.id for s in session.query(Simulado).all()}
+                        bancas_s = session.query(Banca).all()
+                        assuntos_s = session.query(Assunto).all()
+                    
+                    if not simulados_disp:
+                        st.warning("⚠️ Você precisa criar um simulado na aba anterior primeiro.")
+                    else:
+                        sim_selecionado = st.selectbox("🎯 1. Selecione o Simulado Alvo:", list(simulados_disp.keys()))
+                        st.markdown("---")
+                        st.markdown("**🔍 2. Busque as Questões no Banco para Adicionar:**")
+                        
+                        with st.form("form_busca_add"):
+                            c1, c2, c3 = st.columns(3)
+                            with c1: fb = st.multiselect("Filtrar por Banca", [b.sigla for b in bancas_s])
+                            with c2: fa = st.multiselect("Filtrar por Assunto", [a.nome for a in assuntos_s])
+                            with c3: f_ine = st.radio("Tipo:", ["Todas", "Apenas Inéditas"], horizontal=True)
+                            
+                            buscar_btn = st.form_submit_button("Buscar Questões Disponíveis", use_container_width=True)
+                            
+                        # Usa o state para a tela não apagar quando clicarmos nos checkboxes
+                        if buscar_btn:
+                            st.session_state.sim_buscar = True
+                            st.session_state.sim_fb = fb
+                            st.session_state.sim_fa = fa
+                            st.session_state.sim_ine = f_ine
+                            
+                        if st.session_state.get("sim_buscar", False):
+                            with Session(get_engine()) as session:
+                                query = session.query(Questao).options(joinedload(Questao.banca), joinedload(Questao.assunto).joinedload(Assunto.disciplina))
+                                
+                                if st.session_state.sim_fb: query = query.join(Banca, Questao.banca_id == Banca.id).filter(Banca.sigla.in_(st.session_state.sim_fb))
+                                if st.session_state.sim_fa: query = query.join(Assunto, Questao.assunto_id == Assunto.id).filter(Assunto.nome.in_(st.session_state.sim_fa))
+                                
+                                v_ine = st.session_state.get("sim_ine", "Todas")
+                                if v_ine == "Apenas Inéditas": query = query.filter(Questao.is_inedita == True)
+                                
+                                resultados = query.all()
+                                
+                                if not resultados:
+                                    st.info("📭 Nenhuma questão encontrada no banco com esses filtros.")
+                                else:
+                                    st.success(f"{len(resultados)} questões prontas para inserção.")
+                                    
+                                    # Formulário de inserção em lote
+                                    with st.form("form_add_lote"):
+                                        st.markdown("Selecione as questões que farão parte deste simulado:")
+                                        
+                                        selecionadas = []
+                                        for q in resultados:
+                                            prefixo = q.assunto.disciplina.nome[:3].upper() if q.assunto else "GER"
+                                            q_id = f"BAP-{prefixo}{q.id:04d}"
+                                            banca_n = q.banca.sigla if q.banca else "ND"
+                                            assunto_n = q.assunto.nome if q.assunto else "ND"
+                                            
+                                            # O segredo: se o chk for True, guardamos o ID da questão
+                                            chk = st.checkbox(f"🏷️ {q_id} | {banca_n} | {assunto_n}", key=f"add_{q.id}")
+                                            if chk:
+                                                selecionadas.append(q.id)
+                                                
+                                        st.markdown("<br>", unsafe_allow_html=True)
+                                        if st.form_submit_button("➕ Adicionar Lote Selecionado ao Simulado", type="primary", use_container_width=True):
+                                            if not selecionadas:
+                                                st.warning("⚠️ Marque pelo menos uma questão na caixa de seleção.")
+                                            else:
+                                                try:
+                                                    id_sim = simulados_disp[sim_selecionado]
+                                                    adicionadas = 0
+                                                    
+                                                    for q_add_id in selecionadas:
+                                                        # Evita duplicidade no mesmo simulado
+                                                        existe = session.query(SimuladoQuestao).filter_by(simulado_id=id_sim, questao_id=q_add_id).first()
+                                                        if not existe:
+                                                            session.add(SimuladoQuestao(simulado_id=id_sim, questao_id=q_add_id))
+                                                            adicionadas += 1
+                                                            
+                                                    session.commit()
+                                                    if adicionadas > 0:
+                                                        st.success(f"✅ Sucesso! {adicionadas} questões foram vinculadas ao '{sim_selecionado}'.")
+                                                    else:
+                                                        st.info("As questões selecionadas já faziam parte deste simulado.")
+                                                except Exception as e:
+                                                    st.error(f"Erro ao vincular questões: {e}")
 
         except Exception as e:
             st.error(f"⚠️ Erro crítico na Área do Professor: {e}")
