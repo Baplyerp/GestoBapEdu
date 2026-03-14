@@ -266,7 +266,7 @@ else:
                             st.success(f"✅ Assunto {nome_assunto} salvo!")
 
         # -----------------------------------------
-        # ABA 3: NOVA QUESTÃO
+        # ABA 3: NOVA QUESTÃO (Avançada)
         # -----------------------------------------
         with tab_questao:
             st.markdown("#### ✍️ Cadastrar Questão Completa")
@@ -278,8 +278,10 @@ else:
                 opcoes_assunto = {f"{a.disciplina.nome} - {a.nome}": a.id for a in assuntos} if assuntos else {}
             
             if not opcoes_banca or not opcoes_assunto:
-                st.warning("⚠️ Você precisa cadastrar pelo menos 1 Banca, 1 Disciplina e 1 Assunto nas abas anteriores antes de criar uma questão.")
+                st.warning("⚠️ Você precisa cadastrar pelo menos 1 Banca e 1 Assunto nas abas anteriores.")
             else:
+                from streamlit_quill import st_quill # Importamos o editor rico
+                
                 with st.form("form_questao"):
                     col1, col2, col3 = st.columns(3)
                     with col1:
@@ -289,48 +291,78 @@ else:
                     with col3:
                         ano_q = st.number_input("Ano", min_value=1990, max_value=2030, value=2024)
                     
-                    enunciado = st.text_area("Enunciado da Questão (Pode usar Markdown/HTML)", height=150)
+                    st.markdown("**Enunciado da Questão:**")
+                    # O NOVO EDITOR RICO (WYSIWYG)
+                    enunciado = st_quill(placeholder="Cole o texto aqui, use negrito, tabelas, links...", key="quill_enunciado")
                     
                     st.markdown("---")
-                    st.markdown("**Alternativas**")
-                    alt_a = st.text_input("A)", key="alt_a")
-                    alt_b = st.text_input("B)", key="alt_b")
-                    alt_c = st.text_input("C)", key="alt_c")
-                    alt_d = st.text_input("D)", key="alt_d")
-                    alt_e = st.text_input("E)", key="alt_e")
+                    # SELETOR DINÂMICO DE FORMATO
+                    tipo_q = st.radio("Formato da Questão:", ["Múltipla Escolha (ABCDE)", "Múltipla Escolha (ABCD)", "Certo/Errado (CE)"], horizontal=True)
                     
-                    correta = st.radio("Qual é a alternativa correta?", options=["A", "B", "C", "D", "E"], horizontal=True)
+                    st.markdown("**Alternativas:**")
+                    
+                    # Lógica Condicional para os Inputs de Alternativas
+                    if tipo_q == "Múltipla Escolha (ABCDE)":
+                        alt_a = st.text_input("A)", key="ma_a")
+                        alt_b = st.text_input("B)", key="ma_b")
+                        alt_c = st.text_input("C)", key="ma_c")
+                        alt_d = st.text_input("D)", key="ma_d")
+                        alt_e = st.text_input("E)", key="ma_e")
+                        correta = st.radio("Gabarito Correto:", ["A", "B", "C", "D", "E"], horizontal=True)
+                        
+                    elif tipo_q == "Múltipla Escolha (ABCD)":
+                        alt_a = st.text_input("A)", key="mb_a")
+                        alt_b = st.text_input("B)", key="mb_b")
+                        alt_c = st.text_input("C)", key="mb_c")
+                        alt_d = st.text_input("D)", key="mb_d")
+                        correta = st.radio("Gabarito Correto:", ["A", "B", "C", "D"], horizontal=True)
+                        
+                    else: # Certo/Errado (Estilo CEBRASPE)
+                        st.info("No formato C/E, as alternativas 'Certo' e 'Errado' são geradas automaticamente.")
+                        correta = st.radio("Gabarito Correto:", ["Certo", "Errado"], horizontal=True)
                     
                     st.markdown("---")
-                    comentario = st.text_area("Comentário do Professor (Opcional)", placeholder="Explique por que a alternativa está correta...")
+                    st.markdown("**Comentário do Professor (Opcional):**")
+                    comentario = st_quill(placeholder="Explicação, links de vídeos, etc.", key="quill_comentario")
                     
-                    if st.form_submit_button("💾 Gravar Questão no Banco", type="primary", use_container_width=True):
-                        with Session(get_engine()) as session:
-                            try:
-                                # 1. Cria a Questão
-                                nova_q = Questao(
-                                    enunciado_html=enunciado,
-                                    ano=ano_q,
-                                    banca_id=opcoes_banca[banca_sel],
-                                    assunto_id=opcoes_assunto[assunto_sel],
-                                    comentario_html=comentario
-                                )
-                                session.add(nova_q)
-                                session.flush() # Salva temporariamente para pegar o ID gerado
-                                
-                                # 2. Cria as Alternativas vinculadas ao ID da Questão
-                                alternativas_obj = [
-                                    Alternativa(questao_id=nova_q.id, texto_html=alt_a, letra="A", is_correta=(correta=="A")),
-                                    Alternativa(questao_id=nova_q.id, texto_html=alt_b, letra="B", is_correta=(correta=="B")),
-                                    Alternativa(questao_id=nova_q.id, texto_html=alt_c, letra="C", is_correta=(correta=="C")),
-                                    Alternativa(questao_id=nova_q.id, texto_html=alt_d, letra="D", is_correta=(correta=="D")),
-                                    Alternativa(questao_id=nova_q.id, texto_html=alt_e, letra="E", is_correta=(correta=="E"))
-                                ]
-                                session.add_all(alternativas_obj)
-                                session.commit()
-                                
-                                st.success("🎉 Questão gravada com sucesso no Supabase! Ela já está pronta para ser resolvida.")
-                                st.balloons()
-                            except Exception as e:
-                                session.rollback()
-                                st.error(f"Erro Crítico: {e}")
+                    submit_questao = st.form_submit_button("💾 Gravar Questão no Banco", type="primary", use_container_width=True)
+                    
+                    if submit_questao:
+                        # Validação rápida para garantir que o Quill não está vazio
+                        if not enunciado or enunciado == "<p><br></p>":
+                            st.error("❌ O enunciado não pode ficar vazio.")
+                        else:
+                            with Session(get_engine()) as session:
+                                try:
+                                    # 1. Cria a Questão
+                                    nova_q = Questao(
+                                        enunciado_html=enunciado,
+                                        ano=ano_q,
+                                        banca_id=opcoes_banca[banca_sel],
+                                        assunto_id=opcoes_assunto[assunto_sel],
+                                        comentario_html=comentario
+                                    )
+                                    session.add(nova_q)
+                                    session.flush() # Salva temporariamente
+                                    
+                                    # 2. Monta as Alternativas dinamicamente
+                                    alternativas_obj = []
+                                    if tipo_q == "Certo/Errado (CE)":
+                                        alternativas_obj.append(Alternativa(questao_id=nova_q.id, texto_html="Certo", letra="C", is_correta=(correta=="Certo")))
+                                        alternativas_obj.append(Alternativa(questao_id=nova_q.id, texto_html="Errado", letra="E", is_correta=(correta=="Errado")))
+                                    else:
+                                        alternativas_obj.append(Alternativa(questao_id=nova_q.id, texto_html=alt_a, letra="A", is_correta=(correta=="A")))
+                                        alternativas_obj.append(Alternativa(questao_id=nova_q.id, texto_html=alt_b, letra="B", is_correta=(correta=="B")))
+                                        alternativas_obj.append(Alternativa(questao_id=nova_q.id, texto_html=alt_c, letra="C", is_correta=(correta=="C")))
+                                        alternativas_obj.append(Alternativa(questao_id=nova_q.id, texto_html=alt_d, letra="D", is_correta=(correta=="D")))
+                                        if tipo_q == "Múltipla Escolha (ABCDE)":
+                                            alternativas_obj.append(Alternativa(questao_id=nova_q.id, texto_html=alt_e, letra="E", is_correta=(correta=="E")))
+
+                                    session.add_all(alternativas_obj)
+                                    session.commit()
+                                    
+                                    st.success("🎉 Questão gravada com sucesso! O formato e as formatações foram mantidos.")
+                                    st.balloons()
+                                except Exception as e:
+                                    session.rollback()
+                                    st.error(f"Erro Crítico: {e}")
