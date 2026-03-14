@@ -534,7 +534,7 @@ else:
                                         session.rollback()
                                         st.error(f"Erro Crítico: {e}")
                                         
-            # 🚀 ABA 5: GERENCIAR (OTIMIZADA E COM MEMÓRIA)
+            # 🚀 ABA 5: GERENCIAR (CORRIGIDA E SUPER RÁPIDA)
             with tab_gerenciar:
                 st.markdown("#### ⚙️ Gerenciar e Corrigir Questões")
                 st.info("Busque por questões cadastradas para visualizar seu Código Único ou solicitar edição.")
@@ -543,60 +543,74 @@ else:
                     bancas_prof = session.query(Banca).all()
                     assuntos_prof = session.query(Assunto).all()
                     
-                c1, c2 = st.columns(2)
-                filtro_banca = c1.multiselect("Filtrar por Banca", options=[b.sigla for b in bancas_prof])
-                filtro_assunto = c2.multiselect("Filtrar por Assunto", options=[a.nome for a in assuntos_prof])
+                # 🛡️ O FORMULÁRIO DE FILTRO: Evita que a tela recarregue a cada clique!
+                with st.form("form_busca_prof"):
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        filtro_banca = st.multiselect("Filtrar por Banca", options=[b.sigla for b in bancas_prof])
+                    with c2:
+                        filtro_assunto = st.multiselect("Filtrar por Assunto", options=[a.nome for a in assuntos_prof])
+                    
+                    btn_buscar = st.form_submit_button("🔍 Buscar Questões", type="primary", use_container_width=True)
                 
-                # 🧠 O SEGREDO: Salvar a intenção de busca na memória
-                if st.button("🔍 Buscar Questões", type="primary"):
+                # Só processa se o botão foi clicado
+                if btn_buscar:
                     st.session_state.mgr_buscar = True
                     st.session_state.mgr_f_banca = filtro_banca
                     st.session_state.mgr_f_assunto = filtro_assunto
                     
-                # Só executa e mostra os resultados se o botão já foi apertado alguma vez
                 if st.session_state.get("mgr_buscar", False):
-                    with Session(get_engine()) as session:
-                        from sqlalchemy.orm import joinedload
-                        
-                        # ⚡ PERFORMANCE: joinedload evita a lentidão do N+1
-                        query_prof = session.query(Questao).options(
-                            joinedload(Questao.banca),
-                            joinedload(Questao.assunto).joinedload(Assunto.disciplina)
-                        )
-                        
-                        # Filtros inteligentes usando relacionamentos do SQLAlchemy (.has)
-                        if st.session_state.mgr_f_banca:
-                            query_prof = query_prof.filter(Questao.banca.has(Banca.sigla.in_(st.session_state.mgr_f_banca)))
-                        if st.session_state.mgr_f_assunto:
-                            query_prof = query_prof.filter(Questao.assunto.has(Assunto.nome.in_(st.session_state.mgr_f_assunto)))
+                    try:
+                        with Session(get_engine()) as session:
+                            from sqlalchemy.orm import joinedload
                             
-                        resultados = query_prof.all()
-                        
-                        if not resultados:
-                            st.warning("Nenhuma questão encontrada com esses filtros.")
-                        else:
-                            st.success(f"Encontradas {len(resultados)} questões cadastradas.")
+                            query_prof = session.query(Questao).options(
+                                joinedload(Questao.banca),
+                                joinedload(Questao.assunto).joinedload(Assunto.disciplina)
+                            )
                             
-                            # Renderiza a lista de questões sem recarregar tudo do zero
-                            for q in resultados:
-                                # Lógica Q-ID Baply
-                                prefixo_disc = q.assunto.disciplina.nome[:3].upper()
-                                codigo_unico = f"BAP-{prefixo_disc}{q.id:04d}" 
+                            # Filtros robustos com JOIN
+                            if st.session_state.mgr_f_banca:
+                                query_prof = query_prof.join(Banca, Questao.banca_id == Banca.id).filter(Banca.sigla.in_(st.session_state.mgr_f_banca))
+                            if st.session_state.mgr_f_assunto:
+                                query_prof = query_prof.join(Assunto, Questao.assunto_id == Assunto.id).filter(Assunto.nome.in_(st.session_state.mgr_f_assunto))
                                 
-                                with st.expander(f"🏷️ {codigo_unico} | {q.banca.sigla} - {q.ano}"):
-                                    st.markdown(f"**Assunto:** {q.assunto.nome}")
-                                    st.markdown(f"<div style='background: #FAFAFA; padding: 10px; border-radius: 5px; font-size: 0.9rem; max-height: 100px; overflow-y: auto;'>{q.enunciado_html}</div>", unsafe_allow_html=True)
+                            resultados = query_prof.all()
+                            
+                            if not resultados:
+                                st.warning("Nenhuma questão encontrada com esses filtros. Tente deixar os filtros vazios e clicar em Buscar para ver todas as questões.")
+                            else:
+                                st.success(f"Encontradas {len(resultados)} questões cadastradas.")
+                                
+                                for q in resultados:
+                                    # 🛡️ PROTEÇÃO PARA QUESTÕES ANTIGAS (Legacy Code)
+                                    if q.assunto and q.assunto.disciplina:
+                                        prefixo_disc = q.assunto.disciplina.nome[:3].upper()
+                                    else:
+                                        prefixo_disc = "GER" # Geral/Órfã
+                                        
+                                    codigo_unico = f"BAP-{prefixo_disc}{q.id:04d}" 
                                     
-                                    col_edit, col_del = st.columns(2)
-                                    with col_edit:
-                                        if st.button(f"✏️ Editar", key=f"edit_{q.id}", use_container_width=True):
-                                            st.toast(f"Preparando edição para o {codigo_unico}... (Fase 4)")
-                                    with col_del:
-                                        if st.button(f"🗑️ Inativar", key=f"del_{q.id}", use_container_width=True):
-                                            st.toast("Rotina de arquivamento será ativada na Fase 4.")
-                                            
+                                    nome_banca = q.banca.sigla if q.banca else "Banca ND"
+                                    nome_assunto = q.assunto.nome if q.assunto else "Assunto ND"
+                                    
+                                    with st.expander(f"🏷️ {codigo_unico} | {nome_banca} - {q.ano}"):
+                                        st.markdown(f"**Assunto:** {nome_assunto}")
+                                        st.markdown(f"<div style='background: #FAFAFA; padding: 10px; border-radius: 5px; font-size: 0.9rem; max-height: 100px; overflow-y: auto;'>{q.enunciado_html}</div>", unsafe_allow_html=True)
+                                        
+                                        col_edit, col_del = st.columns(2)
+                                        with col_edit:
+                                            if st.button(f"✏️ Editar", key=f"edit_{q.id}", use_container_width=True):
+                                                st.toast(f"Preparando edição para o {codigo_unico}... (Fase 4)")
+                                        with col_del:
+                                            if st.button(f"🗑️ Inativar", key=f"del_{q.id}", use_container_width=True):
+                                                st.toast("Rotina de arquivamento será ativada na Fase 4.")
+                    except Exception as err:
+                        st.error(f"Erro interno ao buscar: {err}")
+
+        # 👇 ATENÇÃO: SUBSTITUA O AVISO GENÉRICO POR ESTE (Mostra o erro real)
         except Exception as e:
-            st.warning("⚠️ Atualização necessária! Vá à aba 'Meu Perfil' e clique em 'Construir Tabelas no Supabase'.")
+            st.error(f"⚠️ Erro crítico na Área do Professor. Detalhe técnico para o desenvolvedor: {e}")
 
     # -----------------------------------------
     # ABA RECUPERADA: MEU PERFIL (INTACTA)
