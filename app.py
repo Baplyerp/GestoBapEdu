@@ -202,7 +202,7 @@ else:
 
         ids_questoes = st.session_state.lista_questoes
 
-        # --- 2. RENDERIZAÇÃO DA TELA ---
+       # --- 2. RENDERIZAÇÃO DA TELA ---
         if not ids_questoes:
             st.info("📭 Nenhuma questão encontrada no banco de dados. Vá até a 'Área do Professor' e cadastre a sua primeira questão!")
         elif st.session_state.idx_questao >= len(ids_questoes):
@@ -214,18 +214,26 @@ else:
         else:
             id_atual = ids_questoes[st.session_state.idx_questao]
 
+            from sqlalchemy.orm import joinedload # Import necessário para carregar relações
+
             with Session(get_engine()) as session:
-                questao = session.query(Questao).get(id_atual)
-                alternativas = questao.alternativas
+                # MÁGICA AQUI: Carregamos a questão junto com Banca, Assunto e Disciplina de uma vez só
+                questao = session.query(Questao).options(
+                    joinedload(Questao.banca),
+                    joinedload(Questao.assunto).joinedload(Assunto.disciplina),
+                    joinedload(Questao.alternativas)
+                ).filter(Questao.id == id_atual).first()
                 
-                # Cabeçalho da Questão (Metadados)
-                st.markdown(f"""
-                    <div style='background-color: #FAFAFA; padding: 10px 15px; border-radius: 8px; border: 1px solid #EAE0D5; display: flex; justify-content: space-between;'>
-                        <span style='color: #7F8C8D; font-size: 0.85rem;'><b>Banca:</b> {questao.banca.sigla} | <b>Ano:</b> {questao.ano} | <b>Assunto:</b> {questao.assunto.disciplina.nome} - {questao.assunto.nome}</span>
-                        <span style='color: #D4AF37; font-weight: bold;'>Questão {st.session_state.idx_questao + 1} de {len(ids_questoes)}</span>
-                    </div>
-                """, unsafe_allow_html=True)
-                st.markdown("<br>", unsafe_allow_html=True)
+                if questao:
+                    alternativas = questao.alternativas
+                    
+                    # O seu código de cabeçalho HTML continua aqui abaixo...
+                    st.markdown(f"""
+                        <div style='background-color: #FAFAFA; padding: 10px 15px; border-radius: 8px; border: 1px solid #EAE0D5; display: flex; justify-content: space-between;'>
+                            <span style='color: #7F8C8D; font-size: 0.85rem;'><b>Banca:</b> {questao.banca.sigla} | <b>Ano:</b> {questao.ano} | <b>Assunto:</b> {questao.assunto.disciplina.nome} - {questao.assunto.nome}</span>
+                            <span style='color: #D4AF37; font-weight: bold;'>Questão {st.session_state.idx_questao + 1} de {len(ids_questoes)}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
 
                 # Enunciado Rico (Renderiza o HTML do Quill perfeitamente)
                 st.markdown(f"<div style='font-size: 1.1rem; color: #2C3E50;'>{questao.enunciado_html}</div>", unsafe_allow_html=True)
