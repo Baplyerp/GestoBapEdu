@@ -1,10 +1,23 @@
-
 import streamlit as st
 import os
 import pandas as pd
 import numpy as np
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
+
+# ==========================================
+# 🚀 ENGENHARIA DE ALTA PERFORMANCE (Imports Top-Level)
+# ==========================================
+# Ao importar tudo aqui em cima, evitamos o "congelamento" ao trocar de abas
+import uuid
+from database import get_engine
+from sqlalchemy.orm import Session, joinedload
+try:
+    from backend.models import Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum
+    BANCO_PRONTO = True
+except Exception as e:
+    BANCO_PRONTO = False
+    ERRO_BANCO = str(e)
 
 # ==========================================
 # 🎨 IDENTIDADE VISUAL
@@ -111,11 +124,15 @@ else:
         
         st.markdown("---")
         
+        # 🛡️ GESTÃO DE ESTADO DO MENU (Evita o congelamento)
+        if 'aba_atual' not in st.session_state:
+            st.session_state.aba_atual = "Hub Central"
+
         selecao = option_menu(
             menu_title=None, 
             options=["Hub Central", "Resolver Questões", "Meu Desempenho", "Zona de Estudo", "Área do Professor", "Meu Perfil"],
             icons=["house", "bullseye", "bar-chart-line", "stopwatch", "pencil-square", "person-badge"],
-            default_index=0,
+            default_index=["Hub Central", "Resolver Questões", "Meu Desempenho", "Zona de Estudo", "Área do Professor", "Meu Perfil"].index(st.session_state.aba_atual),
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
                 "icon": {"color": "#D4AF37", "font-size": "18px"}, 
@@ -124,14 +141,22 @@ else:
             }
         )
         
+        # Se o usuário clicou em uma aba diferente, limpamos o cache de busca e recarregamos a tela rápido
+        if selecao != st.session_state.aba_atual:
+            st.session_state.aba_atual = selecao
+            # Limpa memórias residuais para não travar a próxima tela
+            keys_to_clear = ['mgr_buscar', 'mgr_f_banca', 'mgr_f_assunto', 'lista_questoes', 'idx_questao', 'estado_resposta', 'alt_escolhida_id', 'comentario_prof']
+            for key in keys_to_clear:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.rerun()
+
         st.markdown("---")
         
-        # ... código anterior ...
         email_usuario = st.session_state.utilizador.email
         inicial = email_usuario[0].upper()
         url_avatar = f"https://ui-avatars.com/api/?name={inicial}&background=3E2723&color=D4AF37&rounded=true&bold=true"
         
-        # CORREÇÃO: Bloco HTML contínuo, sem linhas em branco no meio para não quebrar o Markdown
         st.markdown(f"""
             <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; padding: 10px; background-color: #FFFFFF; border-radius: 10px; border: 1px solid #EAE0D5;">
                 <img src="{url_avatar}" style="width: 45px; height: 45px; border-radius: 50%; border: 2px solid #D4AF37; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -147,7 +172,9 @@ else:
             st.session_state.utilizador = None
             st.rerun()
 
+    # ==========================================
     # ROTEADOR DE PÁGINAS
+    # ==========================================
     if selecao == "Hub Central":
         st.markdown("## 🏛️ Hub Central de Estudos")
         st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Bem-vindo de volta! Aqui está o resumo da sua jornada.</p>", unsafe_allow_html=True)
@@ -185,13 +212,11 @@ else:
         st.markdown("## 🎯 Resolver Questões")
         st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Modo de Resolução de Alto Desempenho.</p>", unsafe_allow_html=True)
         
-        from database import get_engine
-        from sqlalchemy.orm import Session, joinedload
-        import uuid
-        
-        try:
-            from backend.models import Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum
+        if not BANCO_PRONTO:
+            st.error(f"⚠️ O sistema está aguardando a construção do banco de dados. Vá em 'Meu Perfil' e clique em 'Construir Tabelas'. Detalhe: {ERRO_BANCO}")
+            st.stop()
             
+        try:
             # --- 1. FILTRO INTELIGENTE ---
             with st.expander("🔍 Criar Novo Caderno de Questões (Filtros)", expanded=False):
                 with Session(get_engine()) as session:
@@ -211,6 +236,9 @@ else:
                     with col_f3:
                         f_ano = st.multiselect("Ano", options=[str(a[0]) for a in anos_db])
                         f_carreira = st.multiselect("Carreira", options=[c.value for c in CarreiraEnum])
+                        
+                    # 🚀 NOVO FILTRO DE INÉDITAS
+                    f_inedita = st.radio("Origem da Questão:", ["Todas", "Apenas Inéditas", "Apenas Concursos Oficiais"], horizontal=True)
 
                     if st.form_submit_button("Gerar Caderno e Iniciar 🚀", type="primary", use_container_width=True):
                         with Session(get_engine()) as session:
@@ -222,6 +250,12 @@ else:
                             if f_ano: query = query.filter(Questao.ano.in_([int(a) for a in f_ano]))
                             if f_escolaridade: query = query.filter(Questao.escolaridade.in_(f_escolaridade))
                             if f_carreira: query = query.filter(Questao.carreira.in_(f_carreira))
+                            
+                            # 🚀 APLICAÇÃO DO FILTRO DE INÉDITAS
+                            if f_inedita == "Apenas Inéditas":
+                                query = query.filter(Questao.is_inedita == True)
+                            elif f_inedita == "Apenas Concursos Oficiais":
+                                query = query.filter(Questao.is_inedita == False)
                             
                             res_ids = [q[0] for q in query.all()]
                             st.session_state.lista_questoes = res_ids
@@ -239,7 +273,7 @@ else:
 
             ids_questoes = st.session_state.lista_questoes
 
-            # --- 3. MOTOR DE RENDERIZAÇÃO 1-CLICK (Blindado contra quebra de HTML) ---
+            # --- 3. MOTOR DE RENDERIZAÇÃO 1-CLICK BLINDADO ---
             if not ids_questoes:
                 st.info("📭 Seu caderno está vazio. Ajuste os filtros acima para buscar questões.")
             elif st.session_state.idx_questao >= len(ids_questoes):
@@ -266,12 +300,13 @@ else:
                         prefixo = questao.assunto.disciplina.nome[:3].upper() if questao.assunto else "GER"
                         qid_baply = f"BAP-{prefixo}{questao.id:04d}"
                         
-                        # CABEÇALHO (Não sofre com o bug porque não usa conteúdo dinâmico do Quill)
+                        selo_inedita = "<span style='background-color: #3498DB; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-left: 10px;'>INÉDITA</span>" if getattr(questao, 'is_inedita', False) else ""
+                        
                         st.markdown(f"""
                             <div style='background-color: #FAFAFA; padding: 12px; border-radius: 8px; border-left: 5px solid #3E2723; border-right: 1px solid #EAE0D5; border-top: 1px solid #EAE0D5; border-bottom: 1px solid #EAE0D5;'>
                                 <div style='display: flex; justify-content: space-between;'>
                                     <span style='color: #7F8C8D; font-size: 0.8rem; font-weight: bold; text-transform: uppercase;'>
-                                        {questao.banca.sigla} • {questao.ano} • {orgao_nome} • {cargo_nome}
+                                        {questao.banca.sigla} • {questao.ano} • {orgao_nome} • {cargo_nome} {selo_inedita}
                                     </span>
                                     <span style='color: #D4AF37; font-size: 0.8rem; font-weight: bold;'>🏷️ {qid_baply}</span>
                                 </div>
@@ -283,7 +318,7 @@ else:
                         """, unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
 
-                        # 🛡️ ENUNCIADO BLINDADO (Sem quebras de linha no f-string)
+                        # 🛡️ PROTEÇÃO HTML: Sem quebras de linha para o Streamlit não bugar o CSS
                         html_enunciado = f"<div style='font-size: 1.15rem; color: #2C3E50; font-family: \"Helvetica Neue\", Helvetica, Arial, sans-serif; line-height: 1.6;'>{questao.enunciado_html}</div>"
                         st.markdown(html_enunciado, unsafe_allow_html=True)
                         
@@ -326,7 +361,7 @@ else:
                                     elif alt.id == st.session_state.get("alt_escolhida_id"):
                                         bg_color, border_color = "#FDEDEC", "#E74C3C"
                                         
-                                # 🛡️ ALTERNATIVA BLINDADA
+                                # 🛡️ PROTEÇÃO HTML NA ALTERNATIVA
                                 html_alt = f"<div style='padding: 10px; border-radius: 8px; background-color: {bg_color}; border: 1px solid {border_color}; margin-bottom: 10px; min-height: 45px; display: flex; align-items: center;'><div style='width: 100%;'>{alt.texto_html}</div></div>"
                                 st.markdown(html_alt, unsafe_allow_html=True)
 
@@ -347,10 +382,9 @@ else:
                                     st.session_state.estado_resposta = "aguardando"
                                     st.rerun()
 
-                            # 🛡️ COMENTÁRIO DO PROFESSOR BLINDADO
                             if st.session_state.get("comentario_prof") and st.session_state.comentario_prof != "<p><br></p>":
                                 with st.expander("👨‍🏫 Comentário do Professor", expanded=True):
-                                    # Linha única sem identação Markdown para garantir renderização perfeita do HTML
+                                    # 🛡️ PROTEÇÃO HTML NO COMENTÁRIO (Sem as quebras que geravam o erro do </div> solto)
                                     html_comentario = f"<div style='background-color: #FFFDF8; padding: 20px; border-radius: 8px; border-left: 5px solid #D4AF37; font-family: \"Helvetica Neue\", Helvetica, Arial, sans-serif; color: #2C3E50; line-height: 1.6; font-size: 1rem;'>{st.session_state.comentario_prof}</div>"
                                     st.markdown(html_comentario, unsafe_allow_html=True)
                                     
@@ -369,16 +403,13 @@ else:
         st.markdown("## 👨‍🏫 Área do Professor (Seed)")
         st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Gestão da base de conhecimento, bancas e questões.</p>", unsafe_allow_html=True)
 
-        from database import get_engine
-        from sqlalchemy.orm import Session
-        
+        if not BANCO_PRONTO:
+            st.error(f"⚠️ O sistema está aguardando a construção do banco de dados. Vá em 'Meu Perfil' e clique em 'Construir Tabelas'. Detalhe: {ERRO_BANCO}")
+            st.stop()
+            
         try:
-            from backend.models import Banca, Disciplina, Assunto, Questao, Alternativa, DificuldadeEnum, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum
-
-            # 🚀 ADICIONADA UMA NOVA ABA: "GERENCIAR QUESTÕES"
             tab_banca, tab_disc, tab_orgao, tab_questao, tab_gerenciar = st.tabs(["🏛️ 1. Bancas", "📚 2. Disciplinas & Assuntos", "🏢 3. Órgãos/Cargos", "✍️ 4. Nova Questão", "⚙️ 5. Gerenciar"])
 
-            # ABA 1: BANCAS (Intacta)
             with tab_banca:
                 st.markdown("#### Cadastrar Nova Banca")
                 with st.form("form_banca"):
@@ -395,7 +426,6 @@ else:
                         except Exception as e:
                             st.error(f"Erro ao salvar: Já existe? Detalhes: {e}")
 
-            # ABA 2: DISCIPLINAS E ASSUNTOS (Intacta)
             with tab_disc:
                 col_d, col_a = st.columns(2)
                 with col_d:
@@ -429,7 +459,6 @@ else:
                                 session.commit()
                                 st.success(f"✅ Assunto {nome_assunto} salvo!")
 
-            # ABA 3: ÓRGÃOS E CARGOS (Intacta)
             with tab_orgao:
                 st.markdown("#### Gestão de Órgãos e Cargos")
                 col_o, col_c = st.columns(2)
@@ -446,7 +475,6 @@ else:
                             with Session(get_engine()) as s: 
                                 s.add(Cargo(nome=n_cargo)); s.commit(); st.success("✅ Cargo Salvo!")
 
-            # ABA 4: NOVA QUESTÃO (Intacta)
             with tab_questao:
                 st.markdown("#### ✍️ Cadastrar Questão Completa")
                 
@@ -471,6 +499,10 @@ else:
                     
                     st.markdown("**2. Preencha os dados:**")
                     with st.form("form_questao"):
+                        # 🚀 NOVO: MARCAÇÃO DE QUESTÃO INÉDITA (Professor)
+                        is_inedita_form = st.checkbox("🎯 Marcar como Questão Inédita (Baply)", value=False)
+                        st.markdown("---")
+                        
                         col1, col2, col3 = st.columns(3)
                         with col1:
                             banca_sel = st.selectbox("Banca", options=list(opcoes_banca.keys()))
@@ -540,7 +572,8 @@ else:
                                             cargo_id=id_cargo,
                                             escolaridade=val_esc,
                                             carreira=val_car,
-                                            comentario_html=comentario
+                                            comentario_html=comentario,
+                                            is_inedita=is_inedita_form # 🚀 SALVA O STATUS INÉDITA NO BANCO
                                         )
                                         session.add(nova_q)
                                         session.flush() 
@@ -560,73 +593,78 @@ else:
                                         session.add_all(alternativas_obj)
                                         session.commit()
                                         
-                                        st.success("🎉 Questão gravada com sucesso! O formato e as formatações foram mantidos.")
+                                        st.success("🎉 Questão gravada com sucesso!")
                                         st.balloons()
                                     except Exception as e:
                                         session.rollback()
                                         st.error(f"Erro Crítico: {e}")
                                         
-            # 🚀 ABA 5: GERENCIAR (CORRIGIDA E SUPER RÁPIDA)
             with tab_gerenciar:
                 st.markdown("#### ⚙️ Gerenciar e Corrigir Questões")
-                st.info("Busque por questões cadastradas para visualizar seu Código Único ou solicitar edição.")
                 
                 with Session(get_engine()) as session:
                     bancas_prof = session.query(Banca).all()
                     assuntos_prof = session.query(Assunto).all()
                     
-                # 🛡️ O FORMULÁRIO DE FILTRO: Evita que a tela recarregue a cada clique!
                 with st.form("form_busca_prof"):
-                    c1, c2 = st.columns(2)
+                    c1, c2, c3 = st.columns(3)
                     with c1:
-                        filtro_banca = st.multiselect("Filtrar por Banca", options=[b.sigla for b in bancas_prof])
+                        filtro_banca = st.multiselect("Banca", options=[b.sigla for b in bancas_prof])
                     with c2:
-                        filtro_assunto = st.multiselect("Filtrar por Assunto", options=[a.nome for a in assuntos_prof])
+                        filtro_assunto = st.multiselect("Assunto", options=[a.nome for a in assuntos_prof])
+                    with c3:
+                        # 🚀 NOVO FILTRO DE INÉDITAS (Professor)
+                        filtro_inedita = st.radio("Tipo:", ["Todas", "Apenas Inéditas", "Apenas Concursos"], horizontal=True)
                     
                     btn_buscar = st.form_submit_button("🔍 Buscar Questões", type="primary", use_container_width=True)
                 
-                # Só processa se o botão foi clicado
                 if btn_buscar:
                     st.session_state.mgr_buscar = True
                     st.session_state.mgr_f_banca = filtro_banca
                     st.session_state.mgr_f_assunto = filtro_assunto
+                    st.session_state.mgr_f_inedita = filtro_inedita
                     
                 if st.session_state.get("mgr_buscar", False):
                     try:
                         with Session(get_engine()) as session:
-                            from sqlalchemy.orm import joinedload
-                            
                             query_prof = session.query(Questao).options(
                                 joinedload(Questao.banca),
                                 joinedload(Questao.assunto).joinedload(Assunto.disciplina)
                             )
                             
-                            # Filtros robustos com JOIN
                             if st.session_state.mgr_f_banca:
                                 query_prof = query_prof.join(Banca, Questao.banca_id == Banca.id).filter(Banca.sigla.in_(st.session_state.mgr_f_banca))
                             if st.session_state.mgr_f_assunto:
                                 query_prof = query_prof.join(Assunto, Questao.assunto_id == Assunto.id).filter(Assunto.nome.in_(st.session_state.mgr_f_assunto))
+                            
+                            # 🚀 APLICA O FILTRO INÉDITA NA BUSCA DO PROFESSOR
+                            v_inedita = st.session_state.get("mgr_f_inedita", "Todas")
+                            if v_inedita == "Apenas Inéditas":
+                                query_prof = query_prof.filter(Questao.is_inedita == True)
+                            elif v_inedita == "Apenas Concursos":
+                                query_prof = query_prof.filter(Questao.is_inedita == False)
                                 
                             resultados = query_prof.all()
                             
                             if not resultados:
-                                st.warning("Nenhuma questão encontrada com esses filtros. Tente deixar os filtros vazios e clicar em Buscar para ver todas as questões.")
+                                st.warning("Nenhuma questão encontrada com esses filtros.")
                             else:
                                 st.success(f"Encontradas {len(resultados)} questões cadastradas.")
                                 
                                 for q in resultados:
-                                    # 🛡️ PROTEÇÃO PARA QUESTÕES ANTIGAS (Legacy Code)
                                     if q.assunto and q.assunto.disciplina:
                                         prefixo_disc = q.assunto.disciplina.nome[:3].upper()
                                     else:
-                                        prefixo_disc = "GER" # Geral/Órfã
+                                        prefixo_disc = "GER"
                                         
                                     codigo_unico = f"BAP-{prefixo_disc}{q.id:04d}" 
-                                    
                                     nome_banca = q.banca.sigla if q.banca else "Banca ND"
                                     nome_assunto = q.assunto.nome if q.assunto else "Assunto ND"
                                     
-                                    with st.expander(f"🏷️ {codigo_unico} | {nome_banca} - {q.ano}"):
+                                    # Selo Inédita no Acordeão do Professor
+                                    tag_inedita = " 🔹 INÉDITA" if getattr(q, 'is_inedita', False) else ""
+                                    
+                                    with st.expander(f"🏷️ {codigo_unico} | {nome_banca} - {q.ano}{tag_inedita}"):
                                         st.markdown(f"**Assunto:** {nome_assunto}")
                                         st.markdown(f"<div style='background: #FAFAFA; padding: 10px; border-radius: 5px; font-size: 0.9rem; max-height: 100px; overflow-y: auto;'>{q.enunciado_html}</div>", unsafe_allow_html=True)
                                         
@@ -640,13 +678,9 @@ else:
                     except Exception as err:
                         st.error(f"Erro interno ao buscar: {err}")
 
-        # 👇 ATENÇÃO: SUBSTITUA O AVISO GENÉRICO POR ESTE (Mostra o erro real)
         except Exception as e:
-            st.error(f"⚠️ Erro crítico na Área do Professor. Detalhe técnico para o desenvolvedor: {e}")
+            st.error(f"⚠️ Erro crítico na Área do Professor: {e}")
 
-    # -----------------------------------------
-    # ABA RECUPERADA: MEU PERFIL (INTACTA)
-    # -----------------------------------------
     elif selecao == "Meu Perfil":
         st.markdown("## 👤 Meu Perfil")
         st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Gerencie as suas informações pessoais e configurações de segurança.</p>", unsafe_allow_html=True)
@@ -663,10 +697,6 @@ else:
                     <p style="color: #7F8C8D; font-size: 0.85rem;">Estudante de Elite</p>
                 </div>
             """, unsafe_allow_html=True)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("📸 Alterar Avatar (Em breve)", use_container_width=True):
-                st.toast("A conexão com o Supabase Storage será ativada na próxima fase!")
 
         with col_dados:
             with st.container():
