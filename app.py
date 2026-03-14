@@ -392,9 +392,93 @@ else:
         except Exception as e:
             st.error(f"⚠️ Erro ao carregar a interface de questões. Detalhe técnico: {e}")
 
+    # ==========================================
+    # 📊 ABA: MEU DESEMPENHO (DASHBOARD ANALÍTICO)
+    # ==========================================
     elif selecao == "Meu Desempenho":
-        st.title("📊 Meu Desempenho")
-        st.info("Estatísticas da conta.")
+        st.markdown("## 📊 Meu Desempenho")
+        st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Inteligência de dados sobre a sua jornada de aprovação.</p>", unsafe_allow_html=True)
+        
+        if not BANCO_PRONTO:
+            st.error("⚠️ Banco de dados não inicializado. Vá em 'Meu Perfil'.")
+            st.stop()
+            
+        try:
+            with Session(get_engine()) as session:
+                # 1. Busca todo o histórico do usuário logado cruzando com as Disciplinas
+                uid = uuid.UUID(st.session_state.utilizador.id)
+                historico = session.query(
+                    HistoricoResolucao.acertou,
+                    HistoricoResolucao.resolvido_em,
+                    Disciplina.nome.label('disciplina')
+                ).join(Questao, HistoricoResolucao.questao_id == Questao.id)\
+                 .join(Assunto, Questao.assunto_id == Assunto.id)\
+                 .join(Disciplina, Assunto.disciplina_id == Disciplina.id)\
+                 .filter(HistoricoResolucao.user_id == uid).all()
+                
+            # 2. Processamento dos Dados com Pandas
+            if not historico:
+                st.info("📭 Não há dados suficientes. Vá para 'Resolver Questões' e inicie uma bateria para gerar as suas primeiras métricas!")
+            else:
+                df = pd.DataFrame(historico)
+                
+                # Conversão de fuso horário simples para os gráficos
+                df['resolvido_em'] = pd.to_datetime(df['resolvido_em']).dt.tz_convert('America/Sao_Paulo')
+                df['data'] = df['resolvido_em'].dt.date
+                
+                # Cálculos Globais
+                total_questoes = len(df)
+                total_acertos = df['acertou'].sum()
+                aproveitamento_global = (total_acertos / total_questoes) * 100
+                
+                # Cálculo da Melhor Disciplina
+                df_disc = df.groupby('disciplina').agg(
+                    total=('acertou', 'count'),
+                    acertos=('acertou', 'sum')
+                ).reset_index()
+                df_disc['aproveitamento'] = (df_disc['acertos'] / df_disc['total']) * 100
+                melhor_disc = df_disc.loc[df_disc['aproveitamento'].idxmax()]['disciplina'] if not df_disc.empty else "N/A"
+                
+                # --- RENDERIZAÇÃO DOS CARDS (VISUAL PREMIUM) ---
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.markdown(f'<div class="baply-card"><div class="card-title">🎯 Questões Resolvidas</div><div class="card-metric">{total_questoes}</div></div>', unsafe_allow_html=True)
+                with col2:
+                    cor_taxa = "#27AE60" if aproveitamento_global >= 70 else "#F39C12" if aproveitamento_global >= 50 else "#E74C3C"
+                    st.markdown(f'<div class="baply-card" style="border-left-color: {cor_taxa};"><div class="card-title">📈 Taxa de Acerto</div><div class="card-metric" style="color: {cor_taxa};">{aproveitamento_global:.1f}%</div></div>', unsafe_allow_html=True)
+                with col3:
+                    st.markdown(f'<div class="baply-card" style="border-left-color: #8B5A2B;"><div class="card-title">🏆 Ponto Forte</div><div class="card-metric" style="font-size: 1.1rem; padding-top: 5px;">{melhor_disc}</div></div>', unsafe_allow_html=True)
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # --- GRÁFICOS E TABELAS ---
+                col_grafico, col_tabela = st.columns([1.5, 1])
+                
+                with col_grafico:
+                    st.markdown("#### 📅 Volume de Resoluções (Últimos Dias)")
+                    # Agrupa por data para o gráfico
+                    df_evolucao = df.groupby('data').size().reset_index(name='Questões Feitas')
+                    df_evolucao.set_index('data', inplace=True)
+                    st.bar_chart(df_evolucao, color="#D4AF37")
+                    
+                with col_tabela:
+                    st.markdown("#### 🔬 Raio-X por Disciplina")
+                    # Formata o dataframe de disciplinas para exibição limpa
+                    df_show = df_disc[['disciplina', 'total', 'aproveitamento']].copy()
+                    df_show['aproveitamento'] = df_show['aproveitamento'].apply(lambda x: f"{x:.1f}%")
+                    df_show.rename(columns={'disciplina': 'Matéria', 'total': 'Qtd', 'aproveitamento': 'Acerto'}, inplace=True)
+                    
+                    st.dataframe(
+                        df_show, 
+                        hide_index=True, 
+                        use_container_width=True,
+                        column_config={
+                            "Matéria": st.column_config.TextColumn("Matéria", width="large"),
+                        }
+                    )
+                    
+        except Exception as e:
+            st.error(f"⚠️ Erro ao processar métricas de desempenho: {e}")
         
     elif selecao == "Zona de Estudo":
         st.title("🧠 Zona de Estudo")
