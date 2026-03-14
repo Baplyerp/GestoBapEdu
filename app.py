@@ -238,7 +238,7 @@ else:
 
             ids_questoes = st.session_state.lista_questoes
 
-            # --- 3. MOTOR DE RENDERIZAÇÃO 1-CLICK (Puro e Rápido) ---
+            # --- 3. MOTOR DE RENDERIZAÇÃO 1-CLICK (Blindado contra quebra de HTML) ---
             if not ids_questoes:
                 st.info("📭 Seu caderno está vazio. Ajuste os filtros acima para buscar questões.")
             elif st.session_state.idx_questao >= len(ids_questoes):
@@ -265,6 +265,7 @@ else:
                         prefixo = questao.assunto.disciplina.nome[:3].upper() if questao.assunto else "GER"
                         qid_baply = f"BAP-{prefixo}{questao.id:04d}"
                         
+                        # CABEÇALHO (Não sofre com o bug porque não usa conteúdo dinâmico do Quill)
                         st.markdown(f"""
                             <div style='background-color: #FAFAFA; padding: 12px; border-radius: 8px; border-left: 5px solid #3E2723; border-right: 1px solid #EAE0D5; border-top: 1px solid #EAE0D5; border-bottom: 1px solid #EAE0D5;'>
                                 <div style='display: flex; justify-content: space-between;'>
@@ -279,19 +280,14 @@ else:
                                 <div style='text-align: right; color: #7F8C8D; font-size: 0.75rem; margin-top: 5px;'>Questão {st.session_state.idx_questao + 1} de {len(ids_questoes)}</div>
                             </div>
                         """, unsafe_allow_html=True)
-
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        # O Enunciado também recebe a proteção de renderização
-                        st.markdown(f"""
-                            <div style='font-size: 1.15rem; color: #2C3E50; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; line-height: 1.6;'>
-                                {questao.enunciado_html}
-                            </div>
-                        """, unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
 
-                        st.markdown("**Alternativas:**")
+                        # 🛡️ ENUNCIADO BLINDADO (Sem quebras de linha no f-string)
+                        html_enunciado = f"<div style='font-size: 1.15rem; color: #2C3E50; font-family: \"Helvetica Neue\", Helvetica, Arial, sans-serif; line-height: 1.6;'>{questao.enunciado_html}</div>"
+                        st.markdown(html_enunciado, unsafe_allow_html=True)
                         
-                        # Retornamos ao formato super rápido de 2 colunas
+                        st.markdown("<br>**Alternativas:**", unsafe_allow_html=True)
+                        
                         for alt in sorted(questao.alternativas, key=lambda x: x.letra):
                             col_btn, col_txt = st.columns([1, 11])
                             
@@ -329,14 +325,9 @@ else:
                                     elif alt.id == st.session_state.get("alt_escolhida_id"):
                                         bg_color, border_color = "#FDEDEC", "#E74C3C"
                                         
-                                # A alternativa também recebe a formatação limpa
-                                st.markdown(f"""
-                                    <div style='padding: 10px; border-radius: 8px; background-color: {bg_color}; border: 1px solid {border_color}; margin-bottom: 10px; min-height: 45px; display: flex; align-items: center;'>
-                                        <div style='width: 100%;'>
-                                            {alt.texto_html}
-                                        </div>
-                                    </div>
-                                """, unsafe_allow_html=True)
+                                # 🛡️ ALTERNATIVA BLINDADA
+                                html_alt = f"<div style='padding: 10px; border-radius: 8px; background-color: {bg_color}; border: 1px solid {border_color}; margin-bottom: 10px; min-height: 45px; display: flex; align-items: center;'><div style='width: 100%;'>{alt.texto_html}</div></div>"
+                                st.markdown(html_alt, unsafe_allow_html=True)
 
                         # --- BARRA DE AÇÕES PÓS-RESPOSTA E COMENTÁRIO ---
                         if st.session_state.estado_resposta == "respondido":
@@ -355,23 +346,12 @@ else:
                                     st.session_state.estado_resposta = "aguardando"
                                     st.rerun()
 
-                            # 🛡️ O COMENTÁRIO BLINDADO PARA MANTER A FORMATAÇÃO DO PROFESSOR
+                            # 🛡️ COMENTÁRIO DO PROFESSOR BLINDADO
                             if st.session_state.get("comentario_prof") and st.session_state.comentario_prof != "<p><br></p>":
                                 with st.expander("👨‍🏫 Comentário do Professor", expanded=True):
-                                    st.markdown(f"""
-                                        <div style='
-                                            background-color: #FFFDF8; 
-                                            padding: 20px; 
-                                            border-radius: 8px; 
-                                            border-left: 5px solid #D4AF37;
-                                            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-                                            color: #2C3E50;
-                                            line-height: 1.6;
-                                            font-size: 1rem;
-                                        '>
-                                            {st.session_state.comentario_prof}
-                                        </div>
-                                    """, unsafe_allow_html=True)
+                                    # Linha única sem identação Markdown para garantir renderização perfeita do HTML
+                                    html_comentario = f"<div style='background-color: #FFFDF8; padding: 20px; border-radius: 8px; border-left: 5px solid #D4AF37; font-family: \"Helvetica Neue\", Helvetica, Arial, sans-serif; color: #2C3E50; line-height: 1.6; font-size: 1rem;'>{st.session_state.comentario_prof}</div>"
+                                    st.markdown(html_comentario, unsafe_allow_html=True)
                                     
         except Exception as e:
             st.error(f"⚠️ Erro ao carregar a interface de questões. Detalhe técnico: {e}")
