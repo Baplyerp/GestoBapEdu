@@ -191,7 +191,7 @@ else:
         try:
             from backend.models import Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum
             
-            # --- 1. FILTRO INTELIGENTE (Geração de Caderno) ---
+            # --- 1. FILTRO INTELIGENTE ---
             with st.expander("🔍 Criar Novo Caderno de Questões (Filtros)", expanded=False):
                 with Session(get_engine()) as session:
                     bancas_db = session.query(Banca).all()
@@ -226,12 +226,14 @@ else:
                             st.session_state.lista_questoes = res_ids
                             st.session_state.idx_questao = 0
                             st.session_state.estado_resposta = "aguardando"
+                            st.session_state.riscadas = set() # 🧹 Limpa os riscos ao gerar novo caderno
                             st.toast(f"Caderno gerado com {len(res_ids)} questões!")
                             st.rerun()
 
             # --- 2. GESTÃO DO CADERNO ATUAL ---
             if 'idx_questao' not in st.session_state: st.session_state.idx_questao = 0
             if 'estado_resposta' not in st.session_state: st.session_state.estado_resposta = "aguardando"
+            if 'riscadas' not in st.session_state: st.session_state.riscadas = set() # Memória do botão "X"
             if 'lista_questoes' not in st.session_state:
                 with Session(get_engine()) as session:
                     st.session_state.lista_questoes = [q[0] for q in session.query(Questao.id).all()]
@@ -246,6 +248,7 @@ else:
                 if st.button("🔄 Refazer Caderno", type="primary"):
                     st.session_state.idx_questao = 0
                     st.session_state.estado_resposta = "aguardando"
+                    st.session_state.riscadas = set() # 🧹 Limpa os riscos ao reiniciar
                     st.rerun()
             else:
                 id_atual = ids_questoes[st.session_state.idx_questao]
@@ -284,15 +287,20 @@ else:
                         st.markdown(f"<div style='font-size: 1.15rem; color: #2C3E50;'>{questao.enunciado_html}</div>", unsafe_allow_html=True)
                         st.markdown("<br>", unsafe_allow_html=True)
 
-                        # 🚀 NOVO LAYOUT DE ALTERNATIVAS (1-Click)
+                        st.markdown("**Alternativas:**")
+                        
+                        # 🚀 NOVO LAYOUT DE ALTERNATIVAS COM ELIMINAÇÃO (1-Click + X)
                         for alt in sorted(questao.alternativas, key=lambda x: x.letra):
-                            col_btn, col_txt = st.columns([1, 11])
+                            # Adicionamos uma 3ª coluna fina no final para o botão de eliminar (X)
+                            col_btn, col_txt, col_x = st.columns([1.5, 9.5, 1])
                             
+                            is_riscada = alt.id in st.session_state.riscadas
+                            
+                            # COLUNA 1: O BOTÃO DA LETRA (A, B, C...)
                             with col_btn:
                                 if st.session_state.estado_resposta == "aguardando":
-                                    # Modo Interativo: Botões clicáveis
-                                    if st.button(alt.letra, key=f"btn_{questao.id}_{alt.id}", use_container_width=True):
-                                        # GRAVAÇÃO INSTANTÂNEA NO BANCO
+                                    # Se foi riscada, o botão desativa para evitar miss-click
+                                    if st.button(alt.letra, key=f"btn_{questao.id}_{alt.id}", use_container_width=True, disabled=is_riscada):
                                         novo_h = HistoricoResolucao(
                                             user_id=uuid.UUID(st.session_state.utilizador.id),
                                             questao_id=questao.id,
@@ -301,8 +309,6 @@ else:
                                         )
                                         session.add(novo_h)
                                         session.commit()
-                                        
-                                        # ATUALIZA A SESSÃO E RODA
                                         st.session_state.estado_resposta = "respondido"
                                         st.session_state.acertou_ultima = alt.is_correta
                                         st.session_state.alt_escolhida_id = alt.id
@@ -310,7 +316,6 @@ else:
                                         st.session_state.comentario_prof = questao.comentario_html
                                         st.rerun()
                                 else:
-                                    # Modo Respondido: Feedback Visual Estático (Sem botão)
                                     if alt.is_correta:
                                         st.markdown(f"<div style='background-color: #27AE60; color: white; text-align: center; padding: 7px; border-radius: 5px; font-weight: bold; margin-top: 5px;'>{alt.letra}</div>", unsafe_allow_html=True)
                                     elif alt.id == st.session_state.get("alt_escolhida_id") and not alt.is_correta:
@@ -318,17 +323,39 @@ else:
                                     else:
                                         st.markdown(f"<div style='background-color: #ECF0F1; color: #95A5A6; text-align: center; padding: 7px; border-radius: 5px; font-weight: bold; margin-top: 5px;'>{alt.letra}</div>", unsafe_allow_html=True)
 
+                            # COLUNA 2: O TEXTO DA ALTERNATIVA (Com efeito Riscado/Transparente)
                             with col_txt:
-                                # Feedback de Cor no Texto da Alternativa
-                                bg_color, border_color = "#FFFFFF", "#F2F3F4"
+                                bg_color, border_color, extra_style = "#FFFFFF", "#F2F3F4", ""
                                 
-                                if st.session_state.estado_resposta == "respondido":
+                                if st.session_state.estado_resposta == "aguardando" and is_riscada:
+                                    bg_color, border_color = "#FAFAFA", "#EAE0D5"
+                                    extra_style = "text-decoration: line-through; opacity: 0.4;" # Mágica do Risco
+                                    
+                                elif st.session_state.estado_resposta == "respondido":
                                     if alt.is_correta:
-                                        bg_color, border_color = "#E9F7EF", "#27AE60" # Verde
+                                        bg_color, border_color = "#E9F7EF", "#27AE60"
                                     elif alt.id == st.session_state.get("alt_escolhida_id"):
-                                        bg_color, border_color = "#FDEDEC", "#E74C3C" # Vermelho
+                                        bg_color, border_color = "#FDEDEC", "#E74C3C"
+                                    elif is_riscada:
+                                        extra_style = "text-decoration: line-through; opacity: 0.4;"
                                         
-                                st.markdown(f"<div style='padding: 10px; border-radius: 8px; background-color: {bg_color}; border: 1px solid {border_color}; margin-bottom: 10px; min-height: 45px; display: flex; align-items: center;'>{alt.texto_html}</div>", unsafe_allow_html=True)
+                                st.markdown(f"<div style='padding: 10px; border-radius: 8px; background-color: {bg_color}; border: 1px solid {border_color}; margin-bottom: 10px; min-height: 45px; display: flex; align-items: center; {extra_style}'>{alt.texto_html}</div>", unsafe_allow_html=True)
+
+                            # COLUNA 3: O BOTÃO DE ELIMINAR (X) OU DESFAZER (↩️)
+                            with col_x:
+                                if st.session_state.estado_resposta == "aguardando":
+                                    if is_riscada:
+                                        if st.button("↩️", key=f"desfazer_{alt.id}", help="Restaurar alternativa"):
+                                            tmp = st.session_state.riscadas.copy()
+                                            tmp.remove(alt.id)
+                                            st.session_state.riscadas = tmp
+                                            st.rerun()
+                                    else:
+                                        if st.button("❌", key=f"riscar_{alt.id}", help="Eliminar alternativa"):
+                                            tmp = st.session_state.riscadas.copy()
+                                            tmp.add(alt.id)
+                                            st.session_state.riscadas = tmp
+                                            st.rerun()
 
                         # --- BARRA DE AÇÕES PÓS-RESPOSTA ---
                         if st.session_state.estado_resposta == "respondido":
@@ -345,9 +372,9 @@ else:
                                 if st.button("Próxima Questão ➡️", type="primary", use_container_width=True):
                                     st.session_state.idx_questao += 1
                                     st.session_state.estado_resposta = "aguardando"
+                                    st.session_state.riscadas = set() # 🧹 Limpa os riscos para a próxima
                                     st.rerun()
 
-                            # Comentário Expandido Automático
                             if st.session_state.get("comentario_prof") and st.session_state.comentario_prof != "<p><br></p>":
                                 with st.expander("👨‍🏫 Comentário do Professor", expanded=True):
                                     st.markdown(st.session_state.comentario_prof, unsafe_allow_html=True)
