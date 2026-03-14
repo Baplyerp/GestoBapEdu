@@ -3,3 +3,4 @@ sqlalchemy
 psycopg2-binary
 supabase
 streamlit-option-menu
+streamlit-quill
