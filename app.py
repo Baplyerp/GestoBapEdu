@@ -13,7 +13,8 @@ import uuid
 from database import get_engine
 from sqlalchemy.orm import Session, joinedload
 try:
-    from backend.models import Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum
+    # 👇 A CORREÇÃO AQUI: Adicionamos Simulado, SimuladoQuestao e RegraPenalidadeEnum no final da linha!
+    from backend.models import Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum, Simulado, SimuladoQuestao, RegraPenalidadeEnum
     BANCO_PRONTO = True
 except Exception as e:
     BANCO_PRONTO = False
