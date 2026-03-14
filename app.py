@@ -408,9 +408,13 @@ else:
             st.stop()
             
         try:
-tab_banca, tab_disc, tab_orgao, tab_questao, tab_gerenciar, tab_simulados = st.tabs(["🏛️ 1. Bancas", "📚 2. Disciplinas & Assuntos", "🏢 3. Órgãos/Cargos", "✍️ 4. Nova Questão", "⚙️ 5. Gerenciar", "📝 6. Simulados"])
+            # 👇 AQUI É A CORREÇÃO: Pressione a tecla TAB uma vez antes do "tab_banca" para ele ficar "dentro" do try
+            tab_banca, tab_disc, tab_orgao, tab_questao, tab_gerenciar, tab_simulados = st.tabs(["🏛️ 1. Bancas", "📚 2. Disciplinas & Assuntos", "🏢 3. Órgãos/Cargos", "✍️ 4. Nova Questão", "⚙️ 5. Gerenciar", "📝 6. Simulados"])
+
+            # ABA 1: BANCAS
             with tab_banca:
                 st.markdown("#### Cadastrar Nova Banca")
+                # ... o resto do seu código continua aqui normalmente ...
                 with st.form("form_banca"):
                     sigla_banca = st.text_input("Sigla", placeholder="Ex: FCC, CEBRASPE, IBFC")
                     nome_banca = st.text_input("Nome Completo", placeholder="Ex: Fundação Carlos Chagas")
