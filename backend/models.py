@@ -44,19 +44,20 @@ class Questao(Base, AuditMixin):
     __tablename__ = 'tb_questao'
     id: Mapped[int] = mapped_column(primary_key=True)
     
-    # Suporta HTML/Markdown puro vindo de um editor de texto
     enunciado_html: Mapped[str] = mapped_column(Text) 
-    
     ano: Mapped[int] = mapped_column(index=True)
     dificuldade: Mapped[DificuldadeEnum] = mapped_column(default=DificuldadeEnum.MEDIA)
     
-    # Resolução do Professor (Texto Rico e Vídeo)
     comentario_html: Mapped[str] = mapped_column(Text, nullable=True)
     video_explicacao_url: Mapped[str] = mapped_column(String(255), nullable=True)
     
+    # Chaves Estrangeiras (IDs)
     assunto_id: Mapped[int] = mapped_column(ForeignKey('tb_assunto.id'), index=True)
     banca_id: Mapped[int] = mapped_column(ForeignKey('tb_banca.id'), index=True)
     
+    # RELACIONAMENTOS (O que estava faltando!)
+    banca: Mapped["Banca"] = relationship()
+    assunto: Mapped["Assunto"] = relationship()
     alternativas: Mapped[list["Alternativa"]] = relationship(back_populates="questao", cascade="all, delete-orphan")
 
 class Alternativa(Base):
