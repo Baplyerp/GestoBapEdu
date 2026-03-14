@@ -676,7 +676,102 @@ else:
                                             st.rerun()
                             st.markdown("---")
 
-        MÓDULO 2: CICLO ESTRATÉGICO
+        # --- 🔄 MÓDULO 2: CICLO ESTRATÉGICO (VERSÃO FINAL CONECTADA) ---
+        with tab_ciclo:
+            st.markdown("#### 🎡 Gestor de Ciclo e Diário de Bordo")
+            
+            if "ciclo_ordem" not in st.session_state:
+                st.session_state.ciclo_ordem = []
+
+            with Session(get_engine()) as session:
+                todas_disciplinas = session.query(Disciplina).all()
+                opcoes_disc = {d.nome: d.id for d in todas_disciplinas}
+
+            col_cfg, col_reg = st.columns([1, 1.2])
+
+            with col_cfg:
+                st.markdown("##### ⚙️ Sua Sequência")
+                st.session_state.ciclo_ordem = st.multiselect(
+                    "Defina a ordem das matérias:",
+                    options=list(opcoes_disc.keys()),
+                    default=st.session_state.ciclo_ordem
+                )
+
+                if st.session_state.ciclo_ordem:
+                    st.markdown("---")
+                    for i, m in enumerate(st.session_state.ciclo_ordem):
+                        seta = "🎯" if i == 0 else "▫️"
+                        st.write(f"{seta} **{m}**")
+                else:
+                    st.info("Configure seu ciclo para começar.")
+
+            with col_reg:
+                if not st.session_state.ciclo_ordem:
+                    st.warning("Aguardando definição do ciclo...")
+                else:
+                    materia_foco = st.session_state.ciclo_ordem[0]
+                    st.markdown(f"##### 📝 Registrar Estudo: **{materia_foco}**")
+                    
+                    with st.form("form_estudo_v2"):
+                        c1, c2 = st.columns(2)
+                        # 🚀 NOVO: Data da Sessão
+                        data_input = c1.date_input("Quando estudou?", value=datetime.now())
+                        qualidade = c2.selectbox("Foco/Absorção:", ["🔥 Máxima", "📈 Alta", "📊 Média", "📉 Baixa", "🧊 Mínima"], index=2)
+                        
+                        st.markdown("**Tempo Líquido (Estudaqui):**")
+                        c3, c4 = st.columns(2)
+                        h_est = c3.number_input("Horas", 0, 12, 1)
+                        m_est = c4.number_input("Minutos", 0, 59, 0)
+                        
+                        # 🚀 NOVO: Observações (Diário de Bordo)
+                        obs_est = st.text_area("O que você estudou hoje?", placeholder="Ex: Atos Administrativos - Requisitos e Atributos. Senti dificuldade em Extinção.")
+                        
+                        if st.form_submit_button("✅ Registrar e Girar Ciclo", type="primary", use_container_width=True):
+                            total_seg = (h_est * 3600) + (m_est * 60)
+                            if total_seg > 0:
+                                with Session(get_engine()) as session:
+                                    try:
+                                        score_map = {"🔥 Máxima": 5, "📈 Alta": 4, "📊 Média": 3, "📉 Baixa": 2, "🧊 Mínima": 1}
+                                        
+                                        nova_sessao = SessaoEstudo(
+                                            user_id=uuid.UUID(st.session_state.utilizador.id),
+                                            disciplina_id=opcoes_disc[materia_foco],
+                                            duracao_segundos=total_seg,
+                                            foco_score=score_map[qualidade],
+                                            observacoes=obs_est,
+                                            # Garantimos que a data da sessão seja a escolhida no calendário
+                                            data_sessao=datetime.combine(data_input, datetime.min.time()).replace(tzinfo=timezone.utc)
+                                        )
+                                        session.add(nova_sessao)
+                                        session.commit()
+                                        
+                                        # Gira a roleta
+                                        st.session_state.ciclo_ordem = st.session_state.ciclo_ordem[1:] + [st.session_state.ciclo_ordem[0]]
+                                        st.success(f"Estudo de {materia_foco} salvo! Ciclo atualizado.")
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(f"Erro ao salvar: {e}")
+                            else:
+                                st.warning("Informe o tempo de estudo.")
+
+            # 📊 RESUMO DE CARGA HORÁRIA (Histórico)
+            st.markdown("---")
+            st.markdown("##### 🕒 Histórico Recente (Diário de Bordo)")
+            with Session(get_engine()) as session:
+                u_id = uuid.UUID(st.session_state.utilizador.id)
+                recente = session.query(SessaoEstudo).options(joinedload(SessaoEstudo.disciplina))\
+                    .filter(SessaoEstudo.user_id == u_id)\
+                    .order_by(SessaoEstudo.data_sessao.desc()).limit(5).all()
+                
+                if recente:
+                    for r in recente:
+                        h = r.duracao_segundos // 3600
+                        m = (r.duracao_segundos % 3600) // 60
+                        with st.expander(f"📅 {r.data_sessao.strftime('%d/%m')} | {r.disciplina.nome} | {h}h{m}m"):
+                            st.write(f"**Qualidade:** {r.foco_score}/5")
+                            st.write(f"**Anotações:** {r.observacoes if r.observacoes else 'Sem notas.'}")
+                else:
+                    st.caption("Nenhum registro ainda.")
 
         # --- 🧬 EDITAL VIVO (PENDENTE FASE 2) ---
         with tab_edital:
