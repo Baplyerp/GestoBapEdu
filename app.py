@@ -2,8 +2,11 @@ import streamlit as st
 import os
 import pandas as pd
 import numpy as np
+from datetime import datetime, timezone  # <--- ADICIONE ESTA LINHA AQUI!
 from supabase import create_client, Client
 from streamlit_option_menu import option_menu
+import uuid
+# ... resto dos imports ...
 
 # ==========================================
 # 🚀 ENGENHARIA DE ALTA PERFORMANCE (Imports Top-Level)
