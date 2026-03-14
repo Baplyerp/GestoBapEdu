@@ -16,17 +16,17 @@ import uuid
 from database import get_engine
 from sqlalchemy.orm import Session, joinedload
 try:
-    # ATUALIZADO: Incluindo as classes da Zona de Estudo
     from backend.models import (
         Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, 
         EscolaridadeEnum, CarreiraEnum, Simulado, SimuladoQuestao, RegraPenalidadeEnum,
-        ConcursoRadar, StatusConcursoEnum, PrioridadeConcursoEnum, ResultadoConcursoEnum, EditalItem
+        ConcursoRadar, StatusConcursoEnum, PrioridadeConcursoEnum, ResultadoConcursoEnum, 
+        EditalItem, SessaoEstudo  # <--- CERTIFIQUE-SE DE QUE ESTA LINHA ESTÁ AQUI
     )
     BANCO_PRONTO = True
 except Exception as e:
     BANCO_PRONTO = False
     ERRO_BANCO = str(e)
-
+    
 # ==========================================
 # 🎨 IDENTIDADE VISUAL
 # ==========================================
