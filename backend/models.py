@@ -74,6 +74,9 @@ class Questao(Base, AuditMixin):
     ano: Mapped[int] = mapped_column(index=True)
     dificuldade: Mapped[DificuldadeEnum] = mapped_column(Enum(DificuldadeEnum), default=DificuldadeEnum.MEDIA)
     
+    # 🚀 NOVO CAMPO: Filtro de Inéditas adicionado
+    is_inedita: Mapped[bool] = mapped_column(default=False, index=True)
+    
     # Novos campos de metadados (Usando Optional)
     escolaridade: Mapped[Optional[EscolaridadeEnum]] = mapped_column(Enum(EscolaridadeEnum), nullable=True, index=True)
     carreira: Mapped[Optional[CarreiraEnum]] = mapped_column(Enum(CarreiraEnum), nullable=True, index=True)
