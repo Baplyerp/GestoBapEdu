@@ -6,9 +6,9 @@ from supabase import create_client, Client
 from streamlit_option_menu import option_menu
 
 # ==========================================
-# 🎨 IDENTIDADE VISUAL (Substitua o link abaixo)
+# 🎨 IDENTIDADE VISUAL
 # ==========================================
-URL_LOGO_BAPLY = "https://raw.githubusercontent.com/Baplyerp/GestoBapEdu/refs/heads/main/logo_baply.png" # <- COLE O LINK RAW DA LOGO AQUI
+URL_LOGO_BAPLY = "https://raw.githubusercontent.com/Baplyerp/GestoBapEdu/refs/heads/main/logo_baply.png"
 
 # 1. Configuração Inicial
 st.set_page_config(page_title="GestoBap Edu", page_icon="🐝", layout="wide")
@@ -35,7 +35,6 @@ if 'utilizador' not in st.session_state:
 if st.session_state.utilizador is None:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        # LOGO E TÍTULO NO LOGIN (Aumentado e Elegante)
         st.markdown(f"""
             <div style='text-align: center; margin-bottom: 20px;'>
                 <img src='{URL_LOGO_BAPLY}' width='160' style='margin-bottom: 15px;'>
@@ -46,7 +45,6 @@ if st.session_state.utilizador is None:
         
         tab_login, tab_registo = st.tabs(["Entrar", "Criar Conta"])
         
-        # --- ABA DE LOGIN ---
         with tab_login:
             email_login = st.text_input("Email", key="login_email")
             senha_login = st.text_input("Palavra-passe", type="password", key="login_senha")
@@ -59,7 +57,6 @@ if st.session_state.utilizador is None:
                 except Exception as e:
                     st.error("❌ Credenciais inválidas. Verifique se confirmou o seu e-mail.")
             
-            # Esqueci minha senha
             with st.expander("Esqueci minha palavra-passe"):
                 recup_email = st.text_input("Digite o seu e-mail de registo:", key="recup_email")
                 if st.button("Enviar link de recuperação", use_container_width=True):
@@ -69,7 +66,6 @@ if st.session_state.utilizador is None:
                     except Exception as e:
                         st.error("❌ Erro ao solicitar recuperação. Verifique o e-mail digitado.")
 
-        # --- ABA DE REGISTO ---            
         with tab_registo:
             st.info("Crie o seu perfil isolado. Os seus dados de estudo são privados.")
             email_novo = st.text_input("Novo Email", key="reg_email")
@@ -87,7 +83,6 @@ if st.session_state.utilizador is None:
 # 🏛️ A PLATAFORMA (Logado)
 # ==========================================
 else:
-    # CSS ATUALIZADO
     st.markdown("""
         <style>
         .stApp { background-color: #FFFFFF; }
@@ -105,9 +100,7 @@ else:
         </style>
     """, unsafe_allow_html=True)
 
-    # MENU LATERAL ANIMADO
     with st.sidebar:
-        # LOGO E TÍTULO NA BARRA LATERAL (Tamanho Aumentado)
         st.markdown(f"""
             <div style='text-align: center; padding-top: 10px;'>
                 <img src='{URL_LOGO_BAPLY}' width='150' style='margin-bottom: 10px;'>
@@ -132,7 +125,6 @@ else:
         
         st.markdown("---")
         
-        # O AVATAR DO USUÁRIO
         email_usuario = st.session_state.utilizador.email
         inicial = email_usuario[0].upper()
         url_avatar = f"https://ui-avatars.com/api/?name={inicial}&background=3E2723&color=D4AF37&rounded=true&bold=true"
@@ -210,9 +202,7 @@ else:
 
         tab_banca, tab_disc, tab_questao = st.tabs(["🏛️ 1. Bancas", "📚 2. Disciplinas & Assuntos", "✍️ 3. Nova Questão"])
 
-        # -----------------------------------------
         # ABA 1: BANCAS
-        # -----------------------------------------
         with tab_banca:
             st.markdown("#### Cadastrar Nova Banca")
             with st.form("form_banca"):
@@ -229,9 +219,7 @@ else:
                     except Exception as e:
                         st.error(f"Erro ao salvar: Já existe? Detalhes: {e}")
 
-        # -----------------------------------------
         # ABA 2: DISCIPLINAS E ASSUNTOS
-        # -----------------------------------------
         with tab_disc:
             col_d, col_a = st.columns(2)
             with col_d:
@@ -255,7 +243,7 @@ else:
                     if not opcoes_disc:
                         st.warning("Cadastre uma disciplina primeiro.")
                     
-                    disc_selecionada = st.selectbox("Vincular à Disciplina:", options=list(opcoes_disc.keys()))
+                    disc_selecionada = st.selectbox("Vincular à Disciplina:", options=list(opcoes_disc.keys()) if opcoes_disc else [])
                     nome_assunto = st.text_input("Nome do Assunto", placeholder="Ex: Normas Internacionais (ISSAI)")
                     
                     if st.form_submit_button("Salvar Assunto", type="primary") and opcoes_disc:
@@ -265,9 +253,7 @@ else:
                             session.commit()
                             st.success(f"✅ Assunto {nome_assunto} salvo!")
 
-        # -----------------------------------------
         # ABA 3: NOVA QUESTÃO (Avançada)
-        # -----------------------------------------
         with tab_questao:
             st.markdown("#### ✍️ Cadastrar Questão Completa")
             
@@ -292,16 +278,13 @@ else:
                         ano_q = st.number_input("Ano", min_value=1990, max_value=2030, value=2024)
                     
                     st.markdown("**Enunciado da Questão:**")
-                    # O NOVO EDITOR RICO (WYSIWYG)
                     enunciado = st_quill(placeholder="Cole o texto aqui, use negrito, tabelas, links...", key="quill_enunciado")
                     
                     st.markdown("---")
-                    # SELETOR DINÂMICO DE FORMATO
                     tipo_q = st.radio("Formato da Questão:", ["Múltipla Escolha (ABCDE)", "Múltipla Escolha (ABCD)", "Certo/Errado (CE)"], horizontal=True)
                     
                     st.markdown("**Alternativas:**")
                     
-                    # Lógica Condicional para os Inputs de Alternativas
                     if tipo_q == "Múltipla Escolha (ABCDE)":
                         alt_a = st.text_input("A)", key="ma_a")
                         alt_b = st.text_input("B)", key="ma_b")
@@ -317,7 +300,7 @@ else:
                         alt_d = st.text_input("D)", key="mb_d")
                         correta = st.radio("Gabarito Correto:", ["A", "B", "C", "D"], horizontal=True)
                         
-                    else: # Certo/Errado (Estilo CEBRASPE)
+                    else:
                         st.info("No formato C/E, as alternativas 'Certo' e 'Errado' são geradas automaticamente.")
                         correta = st.radio("Gabarito Correto:", ["Certo", "Errado"], horizontal=True)
                     
@@ -328,13 +311,11 @@ else:
                     submit_questao = st.form_submit_button("💾 Gravar Questão no Banco", type="primary", use_container_width=True)
                     
                     if submit_questao:
-                        # Validação rápida para garantir que o Quill não está vazio
                         if not enunciado or enunciado == "<p><br></p>":
                             st.error("❌ O enunciado não pode ficar vazio.")
                         else:
                             with Session(get_engine()) as session:
                                 try:
-                                    # 1. Cria a Questão
                                     nova_q = Questao(
                                         enunciado_html=enunciado,
                                         ano=ano_q,
@@ -343,9 +324,8 @@ else:
                                         comentario_html=comentario
                                     )
                                     session.add(nova_q)
-                                    session.flush() # Salva temporariamente
+                                    session.flush() 
                                     
-                                    # 2. Monta as Alternativas dinamicamente
                                     alternativas_obj = []
                                     if tipo_q == "Certo/Errado (CE)":
                                         alternativas_obj.append(Alternativa(questao_id=nova_q.id, texto_html="Certo", letra="C", is_correta=(correta=="Certo")))
@@ -366,3 +346,62 @@ else:
                                 except Exception as e:
                                     session.rollback()
                                     st.error(f"Erro Crítico: {e}")
+
+    # -----------------------------------------
+    # ABA RECUPERADA: MEU PERFIL
+    # -----------------------------------------
+    elif selecao == "Meu Perfil":
+        st.markdown("## 👤 Meu Perfil")
+        st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Gerencie as suas informações pessoais e configurações de segurança.</p>", unsafe_allow_html=True)
+        
+        url_avatar_grande = f"https://ui-avatars.com/api/?name={inicial}&background=3E2723&color=D4AF37&rounded=true&bold=true&size=256"
+
+        col_foto, col_dados = st.columns([1, 2])
+        
+        with col_foto:
+            st.markdown(f"""
+                <div class="baply-card" style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                    <img src="{url_avatar_grande}" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid #D4AF37; box-shadow: 0 4px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
+                    <h4 style="color: #3E2723; margin-bottom: 0px;">{inicial}</h4>
+                    <p style="color: #7F8C8D; font-size: 0.85rem;">Estudante de Elite</p>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("📸 Alterar Avatar (Em breve)", use_container_width=True):
+                st.toast("A conexão com o Supabase Storage será ativada na próxima fase!")
+
+        with col_dados:
+            with st.container():
+                st.markdown('<div class="baply-card" style="border-left-color: #3E2723;">', unsafe_allow_html=True)
+                st.markdown("<h4 style='color: #3E2723; margin-bottom: 20px;'>Dados da Conta</h4>", unsafe_allow_html=True)
+                
+                with st.form("form_perfil"):
+                    st.text_input("E-mail de Acesso (Fixo)", value=email_usuario, disabled=True)
+                    nome_input = st.text_input("Nome de Exibição", placeholder="Ex: Jean Dias")
+                    foco_input = st.text_input("Foco / Edital Principal", placeholder="Ex: Prefeitura de Catende / TGP")
+                    
+                    st.markdown("---")
+                    st.markdown("<h4 style='color: #3E2723; margin-bottom: 20px;'>Segurança</h4>", unsafe_allow_html=True)
+                    st.warning("Para redefinir a sua palavra-passe, termine a sessão e utilize a opção 'Esqueci minha palavra-passe' no ecrã de login.")
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    submit_perfil = st.form_submit_button("Salvar Alterações", type="primary", use_container_width=True)
+                    
+                    if submit_perfil:
+                        st.success("✅ Layout de perfil testado com sucesso! Os dados serão gravados no banco na Fase 3.")
+                
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.markdown("<h4 style='color: #C0392B; margin-bottom: 20px;'>⚙️ Administração do Sistema</h4>", unsafe_allow_html=True)
+                st.info("Utilize este botão apenas uma vez para construir a estrutura do banco de dados no Supabase.")
+                
+                if st.button("🚨 [ADMIN] Construir Tabelas no Supabase", type="primary", use_container_width=True):
+                    try:
+                        from database import init_db
+                        init_db()
+                        st.success("✅ SUCESSO! A Engenharia da Fase 3 foi injetada no Supabase! Verifique o painel do banco de dados.")
+                        st.balloons()
+                    except Exception as e:
+                        st.error(f"❌ Erro ao criar tabelas: {e}")
+                
+                st.markdown('</div>', unsafe_allow_html=True)
