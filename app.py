@@ -13,8 +13,12 @@ import uuid
 from database import get_engine
 from sqlalchemy.orm import Session, joinedload
 try:
-    # 👇 A CORREÇÃO AQUI: Adicionamos Simulado, SimuladoQuestao e RegraPenalidadeEnum no final da linha!
-    from backend.models import Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum, Simulado, SimuladoQuestao, RegraPenalidadeEnum
+    # ATUALIZADO: Incluindo as classes da Zona de Estudo
+    from backend.models import (
+        Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, 
+        EscolaridadeEnum, CarreiraEnum, Simulado, SimuladoQuestao, RegraPenalidadeEnum,
+        ConcursoRadar, StatusConcursoEnum, PrioridadeConcursoEnum, ResultadoConcursoEnum, EditalItem
+    )
     BANCO_PRONTO = True
 except Exception as e:
     BANCO_PRONTO = False
@@ -480,9 +484,136 @@ else:
         except Exception as e:
             st.error(f"⚠️ Erro ao processar métricas de desempenho: {e}")
         
+    # ==========================================
+    # 🧠 ABA: ZONA DE ESTUDO (O Cockpit)
+    # ==========================================
     elif selecao == "Zona de Estudo":
-        st.title("🧠 Zona de Estudo")
-        st.info("Gerenciador Pomodoro.")
+        st.markdown("## 🧠 Zona de Estudo")
+        st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Gestão estratégica de concursos e neurociência do aprendizado.</p>", unsafe_allow_html=True)
+
+        if not BANCO_PRONTO:
+            st.error("⚠️ Banco não sincronizado. Vá em 'Meu Perfil'.")
+            st.stop()
+
+        # Tabs internas para manter a organização e evitar carregamento pesado
+        tab_radar, tab_ciclo, tab_edital, tab_leiseca = st.tabs([
+            "🎯 Radar de Missões", 
+            "🔄 Ciclo de Foco", 
+            "🧬 Edital Vivo", 
+            "🔥 Desafio Lei Seca"
+        ])
+
+        # --- 🎯 MÓDULO 1: RADAR DE MISSÕES & AUTÓPSIA ---
+        with tab_radar:
+            col_inf1, col_inf2 = st.columns([1.5, 1])
+            
+            with col_inf2:
+                st.markdown("#### ➕ Nova Missão (Concurso)")
+                with st.form("form_novo_concurso"):
+                    nome_concurso = st.text_input("Nome do Certame", placeholder="Ex: SEFAZ/PE - Auditor")
+                    
+                    with Session(get_engine()) as session:
+                        bancas_r = session.query(Banca).all()
+                        orgaos_r = session.query(Orgao).all()
+                    
+                    c1, c2 = st.columns(2)
+                    banca_sel = c1.selectbox("Banca", options=["N/D"] + [b.sigla for b in bancas_r])
+                    orgao_sel = c2.selectbox("Órgão", options=["N/D"] + [o.nome for o in orgaos_r])
+                    
+                    status_sel = st.selectbox("Status Atual", [e.value for e in StatusConcursoEnum])
+                    prioridade_sel = st.selectbox("Prioridade", [e.value for e in PrioridadeConcursoEnum])
+                    data_p = st.date_input("Data da Prova (Se houver)", value=None)
+                    
+                    if st.form_submit_button("Lançar Missão no Radar 🚀", type="primary", use_container_width=True):
+                        if not nome_concurso:
+                            st.error("Nome é obrigatório.")
+                        else:
+                            with Session(get_engine()) as session:
+                                try:
+                                    # Busca IDs correspondentes
+                                    id_b = next((b.id for b in bancas_r if b.sigla == banca_sel), None)
+                                    id_o = next((o.nome for o in orgaos_r if o.nome == orgao_sel), None)
+                                    
+                                    novo_c = ConcursoRadar(
+                                        user_id=uuid.UUID(st.session_state.utilizador.id),
+                                        nome=nome_concurso,
+                                        banca_id=id_b,
+                                        status=next(e for e in StatusConcursoEnum if e.value == status_sel),
+                                        prioridade=next(e for e in PrioridadeConcursoEnum if e.value == prioridade_sel),
+                                        data_prova=data_p
+                                    )
+                                    session.add(novo_c)
+                                    session.commit()
+                                    st.success(f"Missão {nome_concurso} adicionada!")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erro ao salvar: {e}")
+
+            with col_inf1:
+                st.markdown("#### 📡 Pipeline de Concursos")
+                
+                with Session(get_engine()) as session:
+                    minhas_missoes = session.query(ConcursoRadar).options(joinedload(ConcursoRadar.banca))\
+                        .filter_by(user_id=uuid.UUID(st.session_state.utilizador.id))\
+                        .order_by(ConcursoRadar.data_prova.asc()).all()
+                
+                if not minhas_missoes:
+                    st.info("Seu radar está limpo. Cadastre seu primeiro objetivo ao lado.")
+                else:
+                    for c in minhas_missoes:
+                        # Estilização baseada na prioridade
+                        border_color = "#3E2723" if c.prioridade == PrioridadeConcursoEnum.FOCO_TOTAL else "#D4AF37"
+                        
+                        with st.expander(f"📌 {c.nome} | {c.status.value}"):
+                            st.markdown(f"""
+                                <div style='border-left: 5px solid {border_color}; padding-left: 15px;'>
+                                    <p style='margin-bottom: 5px;'><b>Banca:</b> {c.banca.sigla if c.banca else 'N/D'} | <b>Prioridade:</b> {c.prioridade.value}</p>
+                                    <p style='margin-bottom: 15px;'>📅 <b>Data da Prova:</b> {c.data_prova.strftime('%d/%m/%Y') if c.data_prova else 'A definir'}</p>
+                                </div>
+                            """, unsafe_allow_html=True)
+                            
+                            # 🧬 INTERFACE DE AUTÓPSIA (Apenas se finalizado/prova realizada)
+                            if c.status in [StatusConcursoEnum.PROVA_REALIZADA, StatusConcursoEnum.FINALIZADO]:
+                                st.markdown("---")
+                                st.markdown("#### 🩺 Autópsia da Prova (Seu 'Olho na Vaga' Pessoal)")
+                                with st.form(f"autopsia_{c.id}"):
+                                    col_r1, col_r2, col_r3 = st.columns(3)
+                                    res_status = col_r1.selectbox("Resultado Final", [e.value for e in ResultadoConcursoEnum], 
+                                                                  index=([e.value for e in ResultadoConcursoEnum].index(c.resultado_status.value) if c.resultado_status else 0))
+                                    n_real = col_r2.number_input("Sua Nota", value=c.nota_real or 0.0)
+                                    n_corte = col_r3.number_input("Nota de Corte", value=c.nota_corte or 0.0)
+                                    
+                                    posic = st.number_input("Sua Posição Final", value=c.posicao or 0, step=1)
+                                    
+                                    if st.form_submit_button("Registrar Desempenho Histórico"):
+                                        with Session(get_engine()) as session:
+                                            db_c = session.query(ConcursoRadar).get(c.id)
+                                            db_c.resultado_status = next(e for e in ResultadoConcursoEnum if e.value == res_status)
+                                            db_c.nota_real = n_real
+                                            db_c.nota_corte = n_corte
+                                            db_c.posicao = posic
+                                            session.commit()
+                                            st.success("Autópsia registrada. Seus dados alimentaram o histórico global.")
+                                            st.rerun()
+                            else:
+                                if st.button("Marcar como Prova Realizada ✅", key=f"btn_done_{c.id}"):
+                                    with Session(get_engine()) as session:
+                                        db_c = session.query(ConcursoRadar).get(c.id)
+                                        db_c.status = StatusConcursoEnum.PROVA_REALIZADA
+                                        session.commit()
+                                        st.rerun()
+
+        # --- 🔄 CICLO DE FOCO (EM CONSTRUÇÃO) ---
+        with tab_ciclo:
+            st.info("🚀 O Motor de Ciclos baseado em Intercalação e Pomodoro será ativado na Fase 2.")
+
+        # --- 🧬 EDITAL VIVO (EM CONSTRUÇÃO) ---
+        with tab_edital:
+            st.info("🧬 O Edital Vivo com progresso automatizado por questões será ativado na Fase 2.")
+
+        # --- 🔥 LEI SECA ---
+        with tab_leiseca:
+            st.info("🔥 O Desafio de Micro-hábitos de Leitura de Legislação será ativado na Fase 2.")
         
     elif selecao == "Área do Professor":
         st.markdown("## 👨‍🏫 Área do Professor (Seed)")
