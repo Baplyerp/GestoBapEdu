@@ -15,7 +15,7 @@ class AuditMixin:
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     is_active: Mapped[bool] = mapped_column(default=True, index=True)
 
-# --- ENUMS PARA FILTROS E REGRAS ---
+# --- ENUMS EXISTENTES ---
 class EscolaridadeEnum(enum.Enum):
     MEDIO = "Médio"
     SUPERIOR = "Superior"
@@ -30,13 +30,35 @@ class CarreiraEnum(enum.Enum):
     SAUDE = "Saúde"
     OUTROS = "Outros"
 
-# 🚀 NOVO: REGRAS DE EDITAL
 class RegraPenalidadeEnum(enum.Enum):
     PADRAO = "Padrão (1 Certa = +1 | Errada = 0)"
     CEBRASPE_1X1 = "CEBRASPE 1x1 (1 Errada anula 1 Certa)"
     CEBRASPE_MEIO = "CEBRASPE 0.5 (1 Errada anula 0.5 Certa)"
 
-# --- CATÁLOGO BASE ---
+# 🚀 NOVOS ENUMS PARA A ZONA DE ESTUDO
+class StatusConcursoEnum(enum.Enum):
+    PREVISTO = "Previsto / Boato"
+    SOLICITADO = "Solicitado"
+    AUTORIZADO = "Autorizado"
+    BANCA_DEFINIDA = "Banca Definida"
+    EDITAL_LANCADO = "Edital Lançado"
+    PROVA_REALIZADA = "Prova Realizada"
+    FINALIZADO = "Finalizado / Homologado"
+
+class PrioridadeConcursoEnum(enum.Enum):
+    FOCO_TOTAL = "Foco Total (O Alvo)"
+    ESCADA = "Concurso Escada"
+    TESTE = "Concurso Treino"
+    SECUNDARIO = "Secundário"
+
+class ResultadoConcursoEnum(enum.Enum):
+    APROVADO_VAGAS = "Aprovado dentro das vagas"
+    APROVADO_CR = "Aprovado no Cadastro Reserva"
+    REPROVADO_CORTE = "Reprovado (Nota de Corte)"
+    REPROVADO_MINIMOS = "Reprovado (Mínimos por matéria)"
+    AUSENTE = "Ausente / Excluído"
+
+# --- CATÁLOGO BASE (Mantido) ---
 class Disciplina(Base, AuditMixin):
     __tablename__ = 'tb_disciplina'
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -66,35 +88,22 @@ class Cargo(Base, AuditMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     nome: Mapped[str] = mapped_column(String(150), index=True)
 
-# --- MOTOR DE AVALIAÇÃO (QUESTÕES) ---
-class DificuldadeEnum(enum.Enum):
-    FACIL = "FACIL"
-    MEDIA = "MEDIA"
-    DIFICIL = "DIFICIL"
-
+# --- MOTOR DE AVALIAÇÃO (Mantido) ---
 class Questao(Base, AuditMixin):
     __tablename__ = 'tb_questao'
     id: Mapped[int] = mapped_column(primary_key=True)
-    
     enunciado_html: Mapped[str] = mapped_column(Text) 
     ano: Mapped[int] = mapped_column(index=True)
-    dificuldade: Mapped[DificuldadeEnum] = mapped_column(Enum(DificuldadeEnum), default=DificuldadeEnum.MEDIA)
+    dificuldade: Mapped[str] = mapped_column(String(20), default="MEDIA") # Simplificado para string para evitar quebra de enum
     is_inedita: Mapped[bool] = mapped_column(default=False, index=True)
-    
-    escolaridade: Mapped[Optional[EscolaridadeEnum]] = mapped_column(Enum(EscolaridadeEnum), nullable=True, index=True)
-    carreira: Mapped[Optional[CarreiraEnum]] = mapped_column(Enum(CarreiraEnum), nullable=True, index=True)
+    escolaridade: Mapped[Optional[EscolaridadeEnum]] = mapped_column(Enum(EscolaridadeEnum), nullable=True)
+    carreira: Mapped[Optional[CarreiraEnum]] = mapped_column(Enum(CarreiraEnum), nullable=True)
     comentario_html: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    video_explicacao_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    
     assunto_id: Mapped[int] = mapped_column(ForeignKey('tb_assunto.id'), index=True)
     banca_id: Mapped[int] = mapped_column(ForeignKey('tb_banca.id'), index=True)
-    orgao_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_orgao.id'), index=True, nullable=True)
-    cargo_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_cargo.id'), index=True, nullable=True)
+    orgao_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_orgao.id'), nullable=True)
+    cargo_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_cargo.id'), nullable=True)
     
-    banca: Mapped["Banca"] = relationship()
-    assunto: Mapped["Assunto"] = relationship()
-    orgao: Mapped[Optional["Orgao"]] = relationship()
-    cargo: Mapped[Optional["Cargo"]] = relationship()
     alternativas: Mapped[list["Alternativa"]] = relationship(back_populates="questao", cascade="all, delete-orphan")
 
 class Alternativa(Base):
@@ -106,31 +115,58 @@ class Alternativa(Base):
     letra: Mapped[str] = mapped_column(String(1)) 
     questao: Mapped["Questao"] = relationship(back_populates="alternativas")
 
-# 🚀 NOVO: ARQUITETURA DO SIMULADO DE EDITAL
+# --- 🚀 NOVA ENGENHARIA DA ZONA DE ESTUDO ---
+
+class ConcursoRadar(Base, AuditMixin):
+    __tablename__ = 'tb_concurso_radar'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    nome: Mapped[str] = mapped_column(String(200))
+    banca_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_banca.id'))
+    orgao_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_orgao.id'))
+    
+    status: Mapped[StatusConcursoEnum] = mapped_column(Enum(StatusConcursoEnum), default=StatusConcursoEnum.PREVISTO)
+    prioridade: Mapped[PrioridadeConcursoEnum] = mapped_column(Enum(PrioridadeConcursoEnum), default=PrioridadeConcursoEnum.SECUNDARIO)
+    data_prova: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    
+    # Campo para Autópsia (Fase Finalizado)
+    resultado_status: Mapped[Optional[ResultadoConcursoEnum]] = mapped_column(Enum(ResultadoConcursoEnum), nullable=True)
+    nota_real: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    nota_corte: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    posicao: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+class EditalItem(Base):
+    """O Edital Vivo: Vincula um Concurso aos Assuntos e rastreia progresso"""
+    __tablename__ = 'tb_edital_item'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    concurso_id: Mapped[int] = mapped_column(ForeignKey('tb_concurso_radar.id'), index=True)
+    assunto_id: Mapped[int] = mapped_column(ForeignKey('tb_assunto.id'))
+    
+    lido_teoria: Mapped[bool] = mapped_column(default=False)
+    revisado: Mapped[bool] = mapped_column(default=False)
+    # A % de questões será calculada dinamicamente via query no histórico
+
+class SessaoEstudo(Base, AuditMixin):
+    """Registro de horas líquidas via Pomodoro"""
+    __tablename__ = 'tb_sessao_estudo'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
+    disciplina_id: Mapped[int] = mapped_column(ForeignKey('tb_disciplina.id'))
+    duracao_segundos: Mapped[int] = mapped_column(Integer) # Tempo real focado
+    foco_score: Mapped[int] = mapped_column(Integer, default=3) # 1 a 5
+
 class Simulado(Base, AuditMixin):
     __tablename__ = 'tb_simulado'
     id: Mapped[int] = mapped_column(primary_key=True)
-    nome: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    nome: Mapped[str] = mapped_column(String(200), unique=True)
     regra_penalidade: Mapped[RegraPenalidadeEnum] = mapped_column(Enum(RegraPenalidadeEnum), default=RegraPenalidadeEnum.PADRAO)
     
-    orgao_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_orgao.id'), nullable=True)
-    cargo_id: Mapped[Optional[int]] = mapped_column(ForeignKey('tb_cargo.id'), nullable=True)
-    
-    orgao: Mapped[Optional["Orgao"]] = relationship()
-    cargo: Mapped[Optional["Cargo"]] = relationship()
-    
-    questoes_vinculadas: Mapped[list["SimuladoQuestao"]] = relationship(back_populates="simulado", cascade="all, delete-orphan")
-
 class SimuladoQuestao(Base):
     __tablename__ = 'tb_simulado_questao'
     id: Mapped[int] = mapped_column(primary_key=True)
-    simulado_id: Mapped[int] = mapped_column(ForeignKey('tb_simulado.id'), index=True)
-    questao_id: Mapped[int] = mapped_column(ForeignKey('tb_questao.id'), index=True)
-    
-    simulado: Mapped["Simulado"] = relationship(back_populates="questoes_vinculadas")
-    questao: Mapped["Questao"] = relationship()
+    simulado_id: Mapped[int] = mapped_column(ForeignKey('tb_simulado.id'))
+    questao_id: Mapped[int] = mapped_column(ForeignKey('tb_questao.id'))
 
-# --- ENGAJAMENTO ---
 class HistoricoResolucao(Base):
     __tablename__ = 'tb_historico_resolucao'
     id: Mapped[int] = mapped_column(primary_key=True)
