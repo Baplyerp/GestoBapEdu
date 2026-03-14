@@ -144,18 +144,19 @@ class EditalItem(Base):
     lido_teoria: Mapped[bool] = mapped_column(default=False)
     revisado: Mapped[bool] = mapped_column(default=False)
 
-# --- 🚀 MUDANÇA AQUI: SESSÃO DE ESTUDO ADAPTADA ---
 class SessaoEstudo(Base, AuditMixin):
     """Registro manual de horas (espelho do Estudaqui)"""
     __tablename__ = 'tb_sessao_estudo'
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
     disciplina_id: Mapped[int] = mapped_column(ForeignKey('tb_disciplina.id'))
+    
+    # 🚀 RELACIONAMENTO PARA JOINEDLOAD FUNCIONAR
+    disciplina: Mapped["Disciplina"] = relationship()
+    
     duracao_segundos: Mapped[int] = mapped_column(Integer) 
     foco_score: Mapped[int] = mapped_column(Integer, default=3)
-    # 🚀 NOVO: Para o seu diário de bordo
     observacoes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    # 🚀 NOVO: Permite lançar estudos com datas passadas
     data_sessao: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 class Simulado(Base, AuditMixin):
@@ -179,17 +180,3 @@ class HistoricoResolucao(Base):
     acertou: Mapped[bool] = mapped_column(index=True)
     tempo_gasto_segundos: Mapped[Optional[int]] = mapped_column(nullable=True)
     resolvido_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-
-class SessaoEstudo(Base, AuditMixin):
-    __tablename__ = 'tb_sessao_estudo'
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), index=True)
-    disciplina_id: Mapped[int] = mapped_column(ForeignKey('tb_disciplina.id'))
-    
-    # 🚀 ADICIONE ESTA LINHA PARA O JOINEDLOAD FUNCIONAR:
-    disciplina: Mapped["Disciplina"] = relationship()
-    
-    duracao_segundos: Mapped[int] = mapped_column(Integer) 
-    foco_score: Mapped[int] = mapped_column(Integer, default=3)
-    observacoes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    data_sessao: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
