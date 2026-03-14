@@ -191,7 +191,7 @@ else:
         try:
             from backend.models import Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum
             
-            # --- 1. FILTRO INTELIGENTE (O "Cérebro" da busca) ---
+            # --- 1. FILTRO INTELIGENTE (Otimizado com st.form) ---
             with st.expander("🔍 Filtro Inteligente", expanded=False):
                 with Session(get_engine()) as session:
                     bancas_db = session.query(Banca).all()
@@ -199,20 +199,25 @@ else:
                     orgaos_db = session.query(Orgao).all()
                     anos_db = session.query(Questao.ano).distinct().all()
                 
-                col_f1, col_f2, col_f3 = st.columns(3)
-                with col_f1:
-                    f_banca = st.multiselect("Banca", options=[b.sigla for b in bancas_db])
-                    f_orgao = st.multiselect("Órgão", options=[o.nome for o in orgaos_db])
-                with col_f2:
-                    f_materia = st.multiselect("Matéria", options=[m.nome for m in materias_db])
-                    f_escolaridade = st.multiselect("Escolaridade", options=[e.value for e in EscolaridadeEnum])
-                with col_f3:
-                    f_ano = st.multiselect("Ano", options=[str(a[0]) for a in anos_db])
-                    f_carreira = st.multiselect("Carreira", options=[c.value for c in CarreiraEnum])
+                # 🛡️ ADICIONADO O FORMULÁRIO PARA CURAR A "ANSIEDADE" DO STREAMLIT
+                with st.form("form_filtro_aluno"):
+                    col_f1, col_f2, col_f3 = st.columns(3)
+                    with col_f1:
+                        f_banca = st.multiselect("Banca", options=[b.sigla for b in bancas_db])
+                        f_orgao = st.multiselect("Órgão", options=[o.nome for o in orgaos_db])
+                    with col_f2:
+                        f_materia = st.multiselect("Matéria", options=[m.nome for m in materias_db])
+                        f_escolaridade = st.multiselect("Escolaridade", options=[e.value for e in EscolaridadeEnum])
+                    with col_f3:
+                        f_ano = st.multiselect("Ano", options=[str(a[0]) for a in anos_db])
+                        f_carreira = st.multiselect("Carreira", options=[c.value for c in CarreiraEnum])
 
-                if st.button("Aplicar Filtros e Gerar Caderno 🚀", use_container_width=True):
+                    submit_filtro = st.form_submit_button("Aplicar Filtros e Gerar Caderno 🚀", type="primary", use_container_width=True)
+                
+                # A lógica de busca só roda se o botão do formulário for clicado
+                if submit_filtro:
                     with Session(get_engine()) as session:
-                        query = session.query(Questao.id) # BUSCAMOS APENAS O ID (Rápido!)
+                        query = session.query(Questao.id) 
                         
                         if f_banca: query = query.join(Banca).filter(Banca.sigla.in_(f_banca))
                         if f_orgao: query = query.join(Orgao).filter(Orgao.nome.in_(f_orgao))
@@ -228,7 +233,7 @@ else:
                         st.toast(f"Caderno gerado com {len(res_ids)} questões!")
                         st.rerun()
 
-            # --- 2. GESTÃO DE SESSÃO ---
+            # --- 2. GESTÃO DE SESSÃO E RENDERIZAÇÃO DA QUESTÃO (Intacta e Segura) ---
             if 'idx_questao' not in st.session_state: st.session_state.idx_questao = 0
             if 'estado_resposta' not in st.session_state: st.session_state.estado_resposta = "aguardando"
             if 'lista_questoes' not in st.session_state:
@@ -237,7 +242,6 @@ else:
 
             ids_questoes = st.session_state.lista_questoes
 
-            # --- 3. RENDERIZAÇÃO ---
             if not ids_questoes:
                 st.info("📭 Nenhuma questão encontrada com esses filtros.")
             elif st.session_state.idx_questao >= len(ids_questoes):
@@ -249,7 +253,6 @@ else:
             else:
                 id_atual = ids_questoes[st.session_state.idx_questao]
                 with Session(get_engine()) as session:
-                    # CARREGAMENTO SOB DEMANDA
                     questao = session.query(Questao).options(
                         joinedload(Questao.banca),
                         joinedload(Questao.orgao),
@@ -259,9 +262,12 @@ else:
                     ).filter(Questao.id == id_atual).first()
 
                     if questao:
-                        # Cabeçalho Premium com Órgão e Cargo
                         orgao_nome = questao.orgao.nome if questao.orgao else 'Geral'
                         cargo_nome = questao.cargo.nome if questao.cargo else 'Geral'
+                        
+                        # 🏷️ Q-ID Adicionado ao Header para o Aluno também!
+                        prefixo = questao.assunto.disciplina.nome[:3].upper() if questao.assunto else "GER"
+                        qid_baply = f"BAP-{prefixo}{questao.id:04d}"
                         
                         st.markdown(f"""
                             <div style='background-color: #FAFAFA; padding: 12px; border-radius: 8px; border-left: 5px solid #3E2723; border-right: 1px solid #EAE0D5; border-top: 1px solid #EAE0D5; border-bottom: 1px solid #EAE0D5;'>
@@ -271,7 +277,7 @@ else:
                                 <div style='color: #3E2723; font-size: 0.9rem; margin-top: 5px;'>
                                     <b>Assunto:</b> {questao.assunto.disciplina.nome} > {questao.assunto.nome}
                                 </div>
-                                <div style='text-align: right; color: #D4AF37; font-size: 0.75rem;'>Q-ID: {questao.id} | {st.session_state.idx_questao + 1} de {len(ids_questoes)}</div>
+                                <div style='text-align: right; color: #D4AF37; font-size: 0.75rem; font-weight: bold;'>🏷️ {qid_baply} | Q. {st.session_state.idx_questao + 1} de {len(ids_questoes)}</div>
                             </div>
                         """, unsafe_allow_html=True)
 
@@ -323,7 +329,8 @@ else:
                                 st.rerun()
                                 
         except Exception as e:
-            st.warning("⚠️ Atualização necessária! Vá à aba 'Meu Perfil' e clique em 'Construir Tabelas no Supabase' para ativar o novo sistema de filtros.")
+            # Proteção aprimorada para mostrar o erro real ao desenvolvedor se algo der errado
+            st.error(f"⚠️ Erro ao carregar a interface de questões. Detalhe técnico: {e}")
 
     elif selecao == "Meu Desempenho":
         st.title("📊 Meu Desempenho")
