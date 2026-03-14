@@ -512,7 +512,7 @@ else:
                 st.session_state.id_editando = None
 
             with col_formulario:
-                # Cabeçalho dinâmico do formulário
+                # Cabeçalho dinâmico
                 if st.session_state.id_editando:
                     st.markdown("#### ✏️ Editar Missão")
                     if st.button("❌ Cancelar Edição"):
@@ -521,39 +521,53 @@ else:
                 else:
                     st.markdown("#### ➕ Nova Missão (Concurso)")
 
-                with st.form("form_radar_concurso"):
-                    # Carregar dados se estiver em modo edição
-                    dados_pre_prenchidos = None
+                # --- 1. BUSCA DE DADOS PRÉVIA (Fora do Form) ---
+                with Session(get_engine()) as session:
+                    # Carregamos as listas para os selects
+                    bancas_r = session.query(Banca).all()
+                    orgaos_r = session.query(Orgao).all()
+                    banca_opts = ["N/D"] + [b.sigla for b in bancas_r]
+                    orgao_opts = ["N/D"] + [o.nome for o in orgaos_r]
+                    
+                    # Variáveis de inicialização padrão
+                    val_nome, val_b_idx, val_o_idx, val_s_idx, val_p_idx, val_data = "", 0, 0, 0, 3, None
+
+                    # Se estiver editando, "extraímos" os dados para variáveis simples
                     if st.session_state.id_editando:
-                        with Session(get_engine()) as session:
-                            dados_pre_prenchidos = session.query(ConcursoRadar).get(st.session_state.id_editando)
-                    
-                    nome_concurso = st.text_input("Nome do Certame", 
-                                                 value=dados_pre_prenchidos.nome if dados_pre_prenchidos else "",
-                                                 placeholder="Ex: SEFAZ/PE - Auditor")
-                    
-                    with Session(get_engine()) as session:
-                        bancas_r = session.query(Banca).all()
-                        orgaos_r = session.query(Orgao).all()
+                        c_db = session.query(ConcursoRadar).options(
+                            joinedload(ConcursoRadar.banca),
+                            joinedload(ConcursoRadar.orgao)
+                        ).get(st.session_state.id_editando)
+                        
+                        if c_db:
+                            val_nome = c_db.nome
+                            val_data = c_db.data_prova
+                            
+                            # Lógica segura de índice para Selectbox
+                            if c_db.banca and c_db.banca.sigla in banca_opts:
+                                val_b_idx = banca_opts.index(c_db.banca.sigla)
+                            if c_db.orgao and c_db.orgao.nome in orgao_opts:
+                                val_o_idx = orgao_opts.index(c_db.orgao.nome)
+                            
+                            s_values = [e.value for e in StatusConcursoEnum]
+                            if c_db.status.value in s_values:
+                                val_s_idx = s_values.index(c_db.status.value)
+                                
+                            p_values = [e.value for e in PrioridadeConcursoEnum]
+                            if c_db.prioridade.value in p_values:
+                                val_p_idx = p_values.index(c_db.prioridade.value)
+
+                # --- 2. O FORMULÁRIO (Usa apenas as variáveis extraídas acima) ---
+                with st.form("form_radar_concurso"):
+                    nome_concurso = st.text_input("Nome do Certame", value=val_nome)
                     
                     c_f1, c_f2 = st.columns(2)
-                    banca_sel = c_f1.selectbox("Banca", options=["N/D"] + [b.sigla for b in bancas_r],
-                                               index=0 if not dados_pre_prenchidos or not dados_pre_prenchidos.banca 
-                                               else [b.sigla for b in bancas_r].index(dados_pre_prenchidos.banca.sigla) + 1)
+                    banca_sel = c_f1.selectbox("Banca", options=banca_opts, index=val_b_idx)
+                    orgao_sel = c_f2.selectbox("Órgão", options=orgao_opts, index=val_o_idx)
                     
-                    orgao_sel = c_f2.selectbox("Órgão", options=["N/D"] + [o.nome for o in orgaos_r],
-                                               index=0 if not dados_pre_prenchidos or not dados_pre_prenchidos.orgao 
-                                               else [o.nome for o in orgaos_r].index(dados_pre_prenchidos.orgao.nome) + 1)
-                    
-                    status_sel = st.selectbox("Status Atual", [e.value for e in StatusConcursoEnum],
-                                              index=0 if not dados_pre_prenchidos 
-                                              else [e.value for e in StatusConcursoEnum].index(dados_pre_prenchidos.status.value))
-                    
-                    prioridade_sel = st.selectbox("Prioridade", [e.value for e in PrioridadeConcursoEnum],
-                                                  index=0 if not dados_pre_prenchidos 
-                                                  else [e.value for e in PrioridadeConcursoEnum].index(dados_pre_prenchidos.prioridade.value))
-                    
-                    data_p = st.date_input("Data da Prova", value=dados_pre_prenchidos.data_prova if dados_pre_prenchidos else None)
+                    status_sel = st.selectbox("Status Atual", [e.value for e in StatusConcursoEnum], index=val_s_idx)
+                    prioridade_sel = st.selectbox("Prioridade", [e.value for e in PrioridadeConcursoEnum], index=val_p_idx)
+                    data_p = st.date_input("Data da Prova", value=val_data)
                     
                     label_btn = "Atualizar Missão 💾" if st.session_state.id_editando else "Lançar no Radar 🚀"
                     
@@ -567,7 +581,6 @@ else:
                                     id_o = next((o.id for o in orgaos_r if o.nome == orgao_sel), None)
                                     
                                     if st.session_state.id_editando:
-                                        # Lógica de Update (A "Borracha")
                                         missao = session.query(ConcursoRadar).get(st.session_state.id_editando)
                                         missao.nome = nome_concurso
                                         missao.banca_id = id_b
@@ -576,9 +589,7 @@ else:
                                         missao.prioridade = next(e for e in PrioridadeConcursoEnum if e.value == prioridade_sel)
                                         missao.data_prova = data_p
                                         st.session_state.id_editando = None
-                                        st.success("Missão atualizada!")
                                     else:
-                                        # Lógica de Insert
                                         novo_c = ConcursoRadar(
                                             user_id=uuid.UUID(st.session_state.utilizador.id),
                                             nome=nome_concurso, banca_id=id_b, orgao_id=id_o,
@@ -587,12 +598,12 @@ else:
                                             data_prova=data_p
                                         )
                                         session.add(novo_c)
-                                        st.success(f"Missão {nome_concurso} lançada!")
                                     
                                     session.commit()
+                                    st.success("Operação realizada com sucesso!")
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(f"Erro ao processar banco: {e}")
+                                    st.error(f"Erro no banco: {e}")
 
             with col_lista:
                 st.markdown("#### 📡 Pipeline de Concursos")
