@@ -182,68 +182,109 @@ else:
 
     elif selecao == "Resolver Questões":
         st.markdown("## 🎯 Resolver Questões")
-        st.markdown("<p style='color: #7F8C8D; margin-top: -10px; margin-bottom: 30px;'>Sua bateria de estudos ativa.</p>", unsafe_allow_html=True)
-
+        
         from database import get_engine
         from sqlalchemy.orm import Session, joinedload
-        from backend.models import Questao, HistoricoResolucao, Assunto, Banca # Importe a Banca aqui também
+        from backend.models import Questao, HistoricoResolucao, Assunto, Banca, Disciplina, Orgao, Cargo, EscolaridadeEnum, CarreiraEnum
         import uuid
 
-        if 'idx_questao' not in st.session_state:
-            st.session_state.idx_questao = 0
-        if 'estado_resposta' not in st.session_state:
-            st.session_state.estado_resposta = "aguardando"
-        
-        # Carregar lista de IDs
-        with Session(get_engine()) as session:
-            todas = session.query(Questao.id).all()
-            ids_questoes = [q.id for q in todas]
+        # --- 1. FILTRO INTELIGENTE (O "Cérebro" da busca) ---
+        with st.expander("🔍 Filtro Inteligente", expanded=False):
+            with Session(get_engine()) as session:
+                # Carregando opções para os filtros (Metadados)
+                bancas_db = session.query(Banca).all()
+                materias_db = session.query(Disciplina).all()
+                orgaos_db = session.query(Orgao).all()
+                anos_db = session.query(Questao.ano).distinct().all()
+            
+            col_f1, col_f2, col_f3 = st.columns(3)
+            with col_f1:
+                f_banca = st.multiselect("Banca", options=[b.sigla for b in bancas_db])
+                f_orgao = st.multiselect("Órgão", options=[o.nome for o in orgaos_db])
+            with col_f2:
+                f_materia = st.multiselect("Matéria", options=[m.nome for m in materias_db])
+                f_escolaridade = st.multiselect("Escolaridade", options=[e.value for e in EscolaridadeEnum])
+            with col_f3:
+                f_ano = st.multiselect("Ano", options=[str(a[0]) for a in anos_db])
+                f_carreira = st.multiselect("Carreira", options=[c.value for c in CarreiraEnum])
 
+            if st.button("Aplicar Filtros e Gerar Caderno 🚀", use_container_width=True):
+                with Session(get_engine()) as session:
+                    query = session.query(Questao.id) # BUSCAMOS APENAS O ID (Rápido!)
+                    
+                    if f_banca: query = query.join(Banca).filter(Banca.sigla.in_(f_banca))
+                    if f_orgao: query = query.join(Orgao).filter(Orgao.nome.in_(f_orgao))
+                    if f_materia: query = query.join(Assunto).join(Disciplina).filter(Disciplina.nome.in_(f_materia))
+                    if f_ano: query = query.filter(Questao.ano.in_([int(a) for a in f_ano]))
+                    if f_escolaridade: query = query.filter(Questao.escolaridade.in_(f_escolaridade))
+                    if f_carreira: query = query.filter(Questao.carreira.in_(f_carreira))
+                    
+                    res_ids = [q[0] for q in query.all()]
+                    st.session_state.lista_questoes = res_ids
+                    st.session_state.idx_questao = 0
+                    st.session_state.estado_resposta = "aguardando"
+                    st.toast(f"Caderno gerado com {len(res_ids)} questões!")
+                    st.rerun()
+
+        # --- 2. GESTÃO DE SESSÃO ---
+        if 'idx_questao' not in st.session_state: st.session_state.idx_questao = 0
+        if 'estado_resposta' not in st.session_state: st.session_state.estado_resposta = "aguardando"
+        if 'lista_questoes' not in st.session_state:
+            with Session(get_engine()) as session:
+                st.session_state.lista_questoes = [q[0] for q in session.query(Questao.id).all()]
+
+        ids_questoes = st.session_state.lista_questoes
+
+        # --- 3. RENDERIZAÇÃO ---
         if not ids_questoes:
-            st.info("📭 Nenhuma questão encontrada. Cadastre uma na 'Área do Professor'!")
+            st.info("📭 Nenhuma questão encontrada com esses filtros.")
         elif st.session_state.idx_questao >= len(ids_questoes):
-            st.success("🎉 Você finalizou todas as questões!")
-            if st.button("🔄 Reiniciar Bateria"):
+            st.success("🎉 Fim do caderno!")
+            if st.button("🔄 Reiniciar"):
                 st.session_state.idx_questao = 0
-                st.session_state.estado_resposta = "aguardando"
                 st.rerun()
         else:
             id_atual = ids_questoes[st.session_state.idx_questao]
-            
             with Session(get_engine()) as session:
-                # O joinedload agora vai funcionar porque corrigimos o models.py!
+                # CARREGAMENTO SOB DEMANDA: Só puxa os dados pesados da questão ATUAL
                 questao = session.query(Questao).options(
                     joinedload(Questao.banca),
+                    joinedload(Questao.orgao),
+                    joinedload(Questao.cargo),
                     joinedload(Questao.assunto).joinedload(Assunto.disciplina),
                     joinedload(Questao.alternativas)
                 ).filter(Questao.id == id_atual).first()
-                
+
                 if questao:
-                    # --- RENDERIZAÇÃO (Tudo aqui dentro) ---
+                    # Cabeçalho Premium com Órgão e Cargo
                     st.markdown(f"""
-                        <div style='background-color: #FAFAFA; padding: 10px 15px; border-radius: 8px; border: 1px solid #EAE0D5; display: flex; justify-content: space-between;'>
-                            <span style='color: #7F8C8D; font-size: 0.85rem;'><b>Banca:</b> {questao.banca.sigla} | <b>Ano:</b> {questao.ano} | <b>Assunto:</b> {questao.assunto.disciplina.nome} - {questao.assunto.nome}</span>
-                            <span style='color: #D4AF37; font-weight: bold;'>Questão {st.session_state.idx_questao + 1} de {len(ids_questoes)}</span>
+                        <div style='background-color: #FAFAFA; padding: 12px; border-radius: 8px; border-left: 5px solid #3E2723; border-right: 1px solid #EAE0D5; border-top: 1px solid #EAE0D5; border-bottom: 1px solid #EAE0D5;'>
+                            <div style='color: #7F8C8D; font-size: 0.8rem; font-weight: bold; text-transform: uppercase;'>
+                                {questao.banca.sigla} • {questao.ano} • {questao.orgao.nome if questao.orgao else 'Geral'} • {questao.cargo.nome if questao.cargo else 'Geral'}
+                            </div>
+                            <div style='color: #3E2723; font-size: 0.9rem; margin-top: 5px;'>
+                                <b>Assunto:</b> {questao.assunto.disciplina.nome} > {questao.assunto.nome}
+                            </div>
+                            <div style='text-align: right; color: #D4AF37; font-size: 0.75rem;'>Q-ID: {questao.id} | {st.session_state.idx_questao + 1} de {len(ids_questoes)}</div>
                         </div>
                     """, unsafe_allow_html=True)
 
                     st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown(f"<div style='font-size: 1.1rem; color: #2C3E50;'>{questao.enunciado_html}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-size: 1.15rem;'>{questao.enunciado_html}</div>", unsafe_allow_html=True)
                     st.markdown("<br>", unsafe_allow_html=True)
 
-                    opcoes_letras = []
                     mapa_alt = {}
-                    st.markdown("**Alternativas:**")
+                    opcoes_letras = []
                     for alt in sorted(questao.alternativas, key=lambda x: x.letra):
-                        st.markdown(f"<div style='margin-bottom: 10px; padding: 10px; border-radius: 5px; background-color: #FFFFFF; border: 1px solid #F2F3F4;'><b>{alt.letra})</b> {alt.texto_html}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='margin-bottom: 8px; padding: 12px; border-radius: 8px; background-color: #FFFFFF; border: 1px solid #F2F3F4;'><b>{alt.letra})</b> {alt.texto_html}</div>", unsafe_allow_html=True)
                         opcoes_letras.append(alt.letra)
                         mapa_alt[alt.letra] = alt
 
                     st.markdown("---")
 
                     if st.session_state.estado_resposta == "aguardando":
-                        resp_sel = st.radio("Sua resposta:", options=opcoes_letras, horizontal=True, key=f"radio_{id_atual}")
-                        if st.button("Confirmar Resposta ✅", type="primary", use_container_width=True):
+                        resp_sel = st.radio("Selecione sua resposta:", options=opcoes_letras, horizontal=True, key=f"q_{id_atual}")
+                        if st.button("Responder ✅", type="primary", use_container_width=True):
                             alt_escolhida = mapa_alt[resp_sel]
                             novo_h = HistoricoResolucao(
                                 user_id=uuid.UUID(st.session_state.utilizador.id),
@@ -256,17 +297,17 @@ else:
                             st.session_state.estado_resposta = "respondido"
                             st.session_state.acertou_ultima = alt_escolhida.is_correta
                             st.session_state.letra_correta = next(a.letra for a in questao.alternativas if a.is_correta)
-                            st.session_state.comentario_prof = questao.comentario_html
                             st.rerun()
 
                     elif st.session_state.estado_resposta == "respondido":
                         if st.session_state.acertou_ultima:
-                            st.success(f"🎯 Correto! Alternativa **{st.session_state.letra_correta}**.")
+                            st.success(f"🎯 ACERTOU! Gabarito: **{st.session_state.letra_correta}**")
                         else:
-                            st.error(f"❌ Incorreto. A certa era **{st.session_state.letra_correta}**.")
+                            st.error(f"❌ ERROU. O gabarito é **{st.session_state.letra_correta}**")
 
-                        if st.session_state.comentario_prof:
-                            st.info(f"**Comentário:**\n{st.session_state.comentario_prof}")
+                        if questao.comentario_html:
+                            with st.expander("👨‍🏫 Ver Comentário do Professor", expanded=True):
+                                st.markdown(questao.comentario_html, unsafe_allow_html=True)
 
                         if st.button("Próxima Questão ➡️", type="primary", use_container_width=True):
                             st.session_state.idx_questao += 1
